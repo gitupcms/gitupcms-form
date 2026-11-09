@@ -15,6 +15,7 @@ const admin = Astro.locals.admin;
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
       <a href="/" class="flex items-center gap-2 font-medium"><Inbox class="size-4" /> Gitupcms Forms</a>
       <div class="flex items-center gap-3 text-sm">
+        <a href="/data-requests" class="text-muted-foreground hover:text-foreground">Data requests</a>
         <a href="/team" class="text-muted-foreground hover:text-foreground">Team</a>
         <span class="text-muted-foreground hidden sm:inline">{admin.email}</span>
         <Button size="sm" variant="outline" data-sign-out>Sign out</Button>

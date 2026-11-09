@@ -70,6 +70,21 @@ Spam gets the same reply as a real post, so bots learn nothing. It waits in the 
 **Settings → Allowed sites** limits who may post: those domains and their subdomains. Once set, posts without
 an `Origin`/`Referer` (scripts, curl) are refused.
 
+## Privacy
+
+You are the controller of what your forms collect; this app helps you keep it lawful (GDPR, KVKK):
+
+- What visitors send (fields, files, file names, subject, reply address) is encrypted with AES-256-GCM, with a key
+  derived from `BETTER_AUTH_SECRET`. **Changing that secret makes stored submissions unreadable**, so keep it
+  safe and back it up with the database.
+- IP addresses are not stored: they live in memory for 10 minutes for rate limiting.
+- **Settings → Keep submissions** deletes old submissions (30–365 days). Spam is deleted after 30 days.
+- **Data requests** finds everything stored about one email address across all forms, to export it (JSON;
+  files are downloaded from each submission) or delete it.
+
+Run it behind HTTPS. `legal/` has drafts of the privacy policy, DPA, terms and security page for the hosted
+version.
+
 ## Webhooks
 
 Each submission that is not spam is POSTed as JSON to the form's webhook, retried once on failure:

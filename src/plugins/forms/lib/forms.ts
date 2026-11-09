@@ -1,14 +1,16 @@
 /**
  * Forms and their submissions in SQLite; uploaded files on disk next to the database (FILES_DIR).
  * A form is an endpoint, POST /f/<key>: the site keeps its own HTML form and only points `action` at it.
+ * Privacy: what a visitor sent (fields, file names and contents, subject, reply address) is stored AES-256-GCM
+ * encrypted, IP addresses are never stored, and old submissions are deleted on the form's schedule.
  */
-import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHmac, randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { db } from "@/lib/db";
-import { decrypt, encrypt } from "@/lib/integrations";
-import { spamCheck, type Fields, type Signal } from "./spam";
-import type { Parsed } from "./parse";
+import { db } from "../../../lib/db.ts";
+import { decrypt, encrypt } from "../../../lib/integrations.ts";
+import { spamCheck, type Fields, type Signal } from "./spam.ts";
+import type { Parsed } from "./parse.ts";
 
 db.pragma("foreign_keys = ON");
 db.exec(`
@@ -50,6 +52,9 @@ CREATE TABLE IF NOT EXISTS delivery (
   at INTEGER NOT NULL
 );
 `);
+// Added after the first schema: 0 keeps submissions until deleted by hand.
+if (!(db.prepare("PRAGMA table_info(form)").all() as { name: string }[]).some((c) => c.name === "retention_days"))
+  db.exec("ALTER TABLE form ADD COLUMN retention_days INTEGER NOT NULL DEFAULT 0");
 
 const env = (name: string) => process.env[name] ?? import.meta.env?.[name];
 const filesDir = () => env("FILES_DIR") || join(dirname(env("DB_PATH") || "data/gitupcms-forms.db"), "files");
@@ -65,6 +70,7 @@ export type Form = {
   webhookUrl: string;
   webhookSecret: string;
   blocklist: string;
+  retentionDays: number;
   createdAt: number;
 };
 export type FileInfo = { field: string; name: string; type: string; size: number };
@@ -76,29 +82,30 @@ export type Submission = {
   status: "inbox" | "spam";
   score: number;
   signals: Signal[];
-  ip: string;
   origin: string;
   subject: string;
   replyTo: string;
   createdAt: number;
 };
 
-const FORM_COLUMNS = `key, name, domains, recipients, redirect, webhook_url AS webhookUrl, webhook_secret AS webhookSecret, blocklist, created_at AS createdAt`;
+const seal = (value: unknown) => encrypt(JSON.stringify(value));
+const open = (value: string) => JSON.parse(decrypt(value));
+
+const FORM_COLUMNS = `key, name, domains, recipients, redirect, webhook_url AS webhookUrl, webhook_secret AS webhookSecret, blocklist, retention_days AS retentionDays, created_at AS createdAt`;
 const toForm = (row: any): Form | null => (row ? { ...row, webhookSecret: decrypt(row.webhookSecret) } : null);
 const toSubmission = (row: any): Submission | null =>
   row
     ? {
         id: row.id,
         formKey: row.form_key,
-        data: JSON.parse(row.data),
-        files: JSON.parse(row.files),
+        data: open(row.data),
+        files: open(row.files),
         status: row.status,
         score: row.score,
         signals: JSON.parse(row.signals),
-        ip: row.ip,
         origin: row.origin,
-        subject: row.subject,
-        replyTo: row.reply_to,
+        subject: open(row.subject),
+        replyTo: open(row.reply_to),
         createdAt: row.created_at,
       }
     : null;
@@ -123,8 +130,11 @@ export const createForm = (name: string, recipient: string) => {
 };
 const newSecret = () => `whsec_${id(24)}`;
 
-export const updateForm = (key: string, f: Pick<Form, "name" | "domains" | "recipients" | "redirect" | "webhookUrl" | "blocklist">) =>
-  db.prepare("UPDATE form SET name = ?, domains = ?, recipients = ?, redirect = ?, webhook_url = ?, blocklist = ? WHERE key = ?").run(f.name, f.domains, f.recipients, f.redirect, f.webhookUrl, f.blocklist, key);
+export const RETENTION_DAYS = [0, 30, 90, 180, 365];
+export const updateForm = (key: string, f: Pick<Form, "name" | "domains" | "recipients" | "redirect" | "webhookUrl" | "blocklist" | "retentionDays">) =>
+  db
+    .prepare("UPDATE form SET name = ?, domains = ?, recipients = ?, redirect = ?, webhook_url = ?, blocklist = ?, retention_days = ? WHERE key = ?")
+    .run(f.name, f.domains, f.recipients, f.redirect, f.webhookUrl, f.blocklist, f.retentionDays, key);
 export const rotateSecret = (key: string) => db.prepare("UPDATE form SET webhook_secret = ? WHERE key = ?").run(encrypt(newSecret()), key);
 
 export const deleteForm = (key: string) => {
@@ -164,7 +174,8 @@ export const countSend = (formKey: string, ip: string) => {
   return times.length - 1;
 };
 
-const hashOf = (formKey: string, data: Fields) => createHash("sha256").update(formKey).update(JSON.stringify(data)).digest("base64url");
+// Keyed, so the stored duplicate check cannot be reversed by guessing what someone typed.
+const hashOf = (formKey: string, data: Fields) => createHmac("sha256", env("BETTER_AUTH_SECRET") ?? "").update(formKey).update(JSON.stringify(data)).digest("base64url");
 
 /** Scores and stores a parsed submission (its files too); returns it. */
 export const saveSubmission = async (form: Form, parsed: Parsed, meta: { ip: string; origin: string; recentFromIp: number }) => {
@@ -176,27 +187,35 @@ export const saveSubmission = async (form: Form, parsed: Parsed, meta: { ip: str
   if (parsed.files.length) {
     const dir = join(filesDir(), subId);
     mkdirSync(dir, { recursive: true });
-    for (const [n, { file }] of parsed.files.entries()) writeFileSync(join(dir, String(n)), Buffer.from(await file.arrayBuffer()));
+    // shortcut: base64 inside the cipher text makes files a third bigger on disk; switch to a byte cipher if that matters.
+    for (const [n, { file }] of parsed.files.entries()) writeFileSync(join(dir, String(n)), encrypt(Buffer.from(await file.arrayBuffer()).toString("base64")));
   }
   db.prepare(
-    `INSERT INTO submission (id, form_key, data, files, status, score, signals, hash, ip, origin, subject, reply_to, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(subId, form.key, JSON.stringify(parsed.data), JSON.stringify(files), check.spam ? "spam" : "inbox", check.score, JSON.stringify(check.signals), hash, meta.ip, meta.origin, parsed.options.subject, parsed.options.replyTo, now());
+    `INSERT INTO submission (id, form_key, data, files, status, score, signals, hash, origin, subject, reply_to, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(subId, form.key, seal(parsed.data), seal(files), check.spam ? "spam" : "inbox", check.score, JSON.stringify(check.signals), hash, meta.origin, seal(parsed.options.subject), seal(parsed.options.replyTo), now());
   return submissionById(subId)!;
 };
 
 export const submissionById = (subId: string) => toSubmission(db.prepare("SELECT * FROM submission WHERE id = ?").get(subId));
 
-const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 export const PAGE = 50;
+const values = (s: Submission) => Object.values(s.data).flat();
 /** One page of a form's inbox or spam, newest first; `q` searches every field. */
 export const submissions = (formKey: string, status: "inbox" | "spam", q = "", page = 1) => {
-  const where = `form_key = ? AND status = ?${q ? ` AND data LIKE ? ESCAPE '\\'` : ""}`;
-  const args = [formKey, status, ...(q ? [`%${likeEscape(q)}%`] : [])];
-  const total = (db.prepare(`SELECT COUNT(*) AS n FROM submission WHERE ${where}`).get(...args) as { n: number }).n;
-  const rows = db.prepare(`SELECT * FROM submission WHERE ${where} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).all(...args, PAGE, (page - 1) * PAGE);
-  return { total, items: rows.map((r) => toSubmission(r)!) };
+  const select = "SELECT * FROM submission WHERE form_key = ? AND status = ? ORDER BY created_at DESC, rowid DESC";
+  if (!q) {
+    const total = (db.prepare("SELECT COUNT(*) AS n FROM submission WHERE form_key = ? AND status = ?").get(formKey, status) as { n: number }).n;
+    return { total, items: db.prepare(`${select} LIMIT ? OFFSET ?`).all(formKey, status, PAGE, (page - 1) * PAGE).map((r) => toSubmission(r)!) };
+  }
+  // shortcut: fields are encrypted, so search decrypts the whole inbox in memory; fine to tens of thousands, then add an index.
+  const needle = q.toLowerCase();
+  const hits = db.prepare(select).all(formKey, status).map((r) => toSubmission(r)!).filter((s) => values(s).some((v) => v.toLowerCase().includes(needle)));
+  return { total: hits.length, items: hits.slice((page - 1) * PAGE, page * PAGE) };
 };
+/** Every submission of a form with this status, oldest first (CSV export). */
+export const allSubmissions = (formKey: string, status: "inbox" | "spam") =>
+  db.prepare("SELECT * FROM submission WHERE form_key = ? AND status = ? ORDER BY created_at, rowid").all(formKey, status).map((r) => toSubmission(r)!);
 export const counts = (formKey: string) =>
   Object.fromEntries((db.prepare("SELECT status, COUNT(*) AS n FROM submission WHERE form_key = ? GROUP BY status").all(formKey) as { status: string; n: number }[]).map((r) => [r.status, r.n])) as Partial<Record<"inbox" | "spam", number>>;
 
@@ -206,8 +225,43 @@ export const deleteSubmission = (subId: string) => {
   return db.prepare("DELETE FROM submission WHERE id = ?").run(subId).changes > 0;
 };
 const removeFiles = (subId: string) => rmSync(join(filesDir(), subId), { recursive: true, force: true });
-/** The stored file `n` of a submission, as a path on disk. */
-export const filePath = (subId: string, n: number) => join(filesDir(), subId, String(n));
+/** The stored file `n` of a submission, decrypted; null when it is gone. */
+export const readUpload = (subId: string, n: number) => {
+  try {
+    return Buffer.from(decrypt(readFileSync(join(filesDir(), subId, String(n)), "utf8")), "base64");
+  } catch {
+    return null;
+  }
+};
+
+// ---- Retention and data requests ----
+
+/** Spam is deleted after this many days whatever the form's setting. */
+export const SPAM_DAYS = 30;
+/** Deletes submissions (and their files) older than their form's retention; spam after SPAM_DAYS. */
+export const purgeExpired = (at = now()) => {
+  const old = db
+    .prepare(
+      `SELECT s.id FROM submission s JOIN form f ON f.key = s.form_key
+       WHERE (s.status = 'spam' AND s.created_at < ?) OR (f.retention_days > 0 AND s.created_at < ? - f.retention_days * 86400)`,
+    )
+    .all(at - SPAM_DAYS * 86400, at) as { id: string }[];
+  for (const { id } of old) deleteSubmission(id);
+  return old.length;
+};
+setInterval(() => purgeExpired(), 3600_000).unref();
+setTimeout(() => purgeExpired(), 0).unref();
+
+/** Every submission, in any form, that names this email in a field or as the reply address: for access and erasure requests. */
+// shortcut: decrypts every submission; fine to ~100k rows, then store a keyed hash of each email to look them up.
+export const submissionsByEmail = (email: string) => {
+  const e = email.trim().toLowerCase();
+  return db
+    .prepare("SELECT * FROM submission ORDER BY created_at")
+    .all()
+    .map((r) => toSubmission(r)!)
+    .filter((s) => s.replyTo.toLowerCase() === e || values(s).some((v) => v.trim().toLowerCase() === e));
+};
 
 // ---- Deliveries ----
 

@@ -82,15 +82,24 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 
 ## 4. Sonraki sürümler
 
-- Turnstile, auto-responder, dosya yükleme (yerel disk; S3 opsiyonel), saklama süresi (otomatik silme).
+- Turnstile, auto-responder, S3'e dosya yükleme.
 - Hazır Slack/Discord bildirimi (webhook üstüne küçük formatlayıcı).
 - Basit kurallar: "alan = değer → şu alıcıya gönder", kaydetmeden önce örnek gönderimle deneme.
 - REST API (`X-API-Key`): formlar ve gönderimler; gerekirse MCP.
 
+## 4b. Gizlilik (GDPR / KVKK), hem self-host hem cloud — yapıldı
+
+- Gönderim içeriği, dosyalar, dosya adları, konu ve yanıt adresi AES-256-GCM ile şifreli saklanır.
+- IP adresi saklanmaz; hız sınırı için bellekte 10 dakika durur.
+- Form başına saklama süresi (30/90/180/365 gün); spam 30 günde silinir.
+- **Data requests** sayfası: bir e-postaya ait her şeyi bul, JSON indir, sil.
+- `legal/`: güvenlik, gizlilik (KVKK aydınlatma dahil), DPA (alt işleyenler Ek 3), kullanım şartları taslakları.
+  Cloud açılmadan önce: şirket bilgileri, AB bölgesi (öneri eu-central-1), alt işleyen listesi ve avukat kontrolü.
+
 ## 5. Yapmayacaklarımız
 
 - Görsel form builder ve embed script: form sitede kalır, ürün backend'dir (HeyForm/OpnForm başka iş).
-- AI Reply, lead pipeline, faturalandırma/planlar, AB/ABD veri bölgesi seçimi (self-host'ta veri zaten sende).
+- AI Reply, lead pipeline. (Cloud için faturalandırma ve AB veri bölgesi cloud işinde ele alınacak.)
 
 ## 6. WuppyCMS ile ilişki
 

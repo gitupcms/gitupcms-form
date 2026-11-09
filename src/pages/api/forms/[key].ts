@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { HttpError } from "@/lib/http";
 import { EMAIL } from "@/lib/team";
-import { deleteForm, deleteSubmission, formByKey, list, rotateSecret, setStatus, submissionById, updateForm, type Form } from "@/plugins/forms/lib/forms";
+import { deleteForm, deleteSubmission, formByKey, list, RETENTION_DAYS, rotateSecret, setStatus, submissionById, updateForm, type Form } from "@/plugins/forms/lib/forms";
 import { deliver } from "@/plugins/forms/lib/deliver";
 
 const url = (value: unknown, label: string) => {
@@ -20,6 +20,8 @@ const actions: Record<string, (form: Form, body: any) => unknown> = {
     const domains = list(String(body.domains ?? "")).map((d) => d.replace(/^https?:\/\//, "").replace(/\/.*$/, ""));
     const badDomain = domains.find((d) => !/^[a-z0-9.-]+(:\d+)?$/.test(d));
     if (badDomain) throw new HttpError(`Not a domain: ${badDomain} (use example.com)`, 400);
+    const retentionDays = Number(body.retentionDays ?? 0);
+    if (!RETENTION_DAYS.includes(retentionDays)) throw new HttpError("Pick how long to keep submissions from the list.", 400);
     updateForm(form.key, {
       name,
       recipients: recipients.join(", "),
@@ -27,6 +29,7 @@ const actions: Record<string, (form: Form, body: any) => unknown> = {
       redirect: url(body.redirect, "The redirect"),
       webhookUrl: url(body.webhookUrl, "The webhook"),
       blocklist: String(body.blocklist ?? "").slice(0, 20_000),
+      retentionDays,
     });
   },
   "rotate-secret": (form) => void rotateSecret(form.key),

@@ -1,7 +1,7 @@
 ---
 import { Button } from "@/components/ui/button";
 import { button, inputClass, sectionLabel } from "@/components/ui/island";
-import type { Form } from "@/plugins/forms/lib/forms";
+import { RETENTION_DAYS, SPAM_DAYS, type Form } from "@/plugins/forms/lib/forms";
 
 interface Props {
   form: Form;
@@ -38,6 +38,13 @@ const hint = "text-muted-foreground text-xs";
       Blocklist
       <textarea class={inputClass + " min-h-24 py-2"} name="blocklist" placeholder={"casino\nspammer@example.com\n203.0.113.7"}>{form.blocklist}</textarea>
       <span class={hint}>One per line: a word or phrase, an email address or an IP. A match sends the submission to Spam.</span>
+    </label>
+    <label class={label}>
+      Keep submissions
+      <select class={inputClass} name="retentionDays">
+        {RETENTION_DAYS.map((d) => <option value={d} selected={d === form.retentionDays}>{d ? `${d} days, then delete them` : "Until I delete them"}</option>)}
+      </select>
+      <span class={hint}>Old submissions and their files are deleted for good. Spam is always deleted after {SPAM_DAYS} days.</span>
     </label>
     <div class="flex items-center gap-3">
       <Button type="submit">Save</Button>
