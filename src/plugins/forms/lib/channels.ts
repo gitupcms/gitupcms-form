@@ -17,10 +17,9 @@ export const plainText = (m: Message, max: number) => {
   return (body.length + link.length > max ? `${body.slice(0, max - link.length - 1)}…` : body) + link;
 };
 
-/** `redirectOk`: Apps Script answers a POST it ran with a redirect to its output. */
-const send = async (url: string, init: RequestInit, redirectOk = false) => {
+const send = async (url: string, init: RequestInit) => {
   const res = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(10_000) });
-  if (!res.ok && !(redirectOk && res.status >= 300 && res.status < 400)) {
+  if (!res.ok) {
     const detail = (await res.text().catch(() => "")).slice(0, 200);
     throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
   }
@@ -38,16 +37,42 @@ export const channels = (c: FormConfig, m: Message): Channel[] => {
   if (c.telegram.token)
     out.push({ kind: "telegram", target: `Telegram ${c.telegram.chatId}`, run: () => send(`https://api.telegram.org/bot${c.telegram.token}/sendMessage`, json({ chat_id: c.telegram.chatId, text: plainText(m, 4000), disable_web_page_preview: true })) });
   // Google Sheets through an Apps Script web app the owner deploys on their sheet (no Google sign-in here).
-  if (c.sheets) out.push({ kind: "sheets", target: "Google Sheets", run: () => send(c.sheets, json({ form: m.form, submittedAt: m.createdAt, ...Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)])), files: m.files.join(", "), url: m.url }), true) });
+  if (c.sheets) out.push({ kind: "sheets", target: "Google Sheets", run: () => sheets(c.sheets, { form: m.form, submittedAt: m.createdAt, ...Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)])), files: m.files.join(", "), url: m.url }) });
   if (c.notion.token) out.push({ kind: "notion", target: "Notion", run: () => notion(c.notion, m) });
-  if (c.airtable.token)
-    out.push({
-      kind: "airtable",
-      target: `Airtable ${c.airtable.table}`,
-      run: () =>
-        send(`https://api.airtable.com/v0/${c.airtable.base}/${encodeURIComponent(c.airtable.table)}`, json({ typecast: true, records: [{ fields: Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)])) }] }, { Authorization: `Bearer ${c.airtable.token}` })),
-    });
+  if (c.airtable.token) out.push({ kind: "airtable", target: `Airtable ${c.airtable.table}`, run: () => airtable(c.airtable, m) });
   return out;
+};
+
+/**
+ * A row in the table. Airtable refuses the whole row for one field it has no column for, so such fields are
+ * left out (and named in the log) instead of losing the submission.
+ */
+const airtable = async (a: FormConfig["airtable"], m: Message) => {
+  const fields = Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)]));
+  const skipped: string[] = [];
+  while (Object.keys(fields).length) {
+    const res = await fetch(`https://api.airtable.com/v0/${a.base}/${encodeURIComponent(a.table)}`, { ...json({ typecast: true, records: [{ fields }] }, { Authorization: `Bearer ${a.token}` }), signal: AbortSignal.timeout(10_000) });
+    if (res.ok) return `HTTP ${res.status}${skipped.length ? `; no column for: ${skipped.join(", ")}` : ""}`;
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    const unknown = /UNKNOWN_FIELD_NAME[\s\S]*?Unknown field name: \\?"(.+?)\\?"/.exec(detail)?.[1];
+    if (!unknown || !(unknown in fields)) throw new Error(`HTTP ${res.status}: ${detail}`);
+    // Airtable's own columns start with a capital ("Name", "Notes"): try "name" as "Name" once before giving up.
+    const capital = unknown[0].toUpperCase() + unknown.slice(1);
+    if (capital !== unknown && !(capital in fields) && !skipped.includes(capital)) fields[capital] = fields[unknown];
+    else skipped.push(unknown);
+    delete fields[unknown];
+  }
+  throw new Error(`The table has no column for any field (${skipped.join(", ")}): add columns with the form's field names`);
+};
+
+/** Apps Script runs the POST, then redirects to its answer; only "ok" there means the row was written. */
+const sheets = async (url: string, row: Record<string, string>) => {
+  const res = await fetch(url, { ...json(row), redirect: "manual", signal: AbortSignal.timeout(15_000) });
+  const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+  const answer = next ? await fetch(next, { signal: AbortSignal.timeout(10_000) }) : res;
+  const text = (await answer.text().catch(() => "")).trim();
+  if (text !== "ok") throw new Error(`The script did not add the row (HTTP ${answer.status}): ${text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200)}`);
+  return "row added";
 };
 
 const NOTION = { "Notion-Version": "2022-06-28" };

@@ -111,7 +111,7 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
       <label class={label}>Base ID <input class={inputClass} name="config.airtable.base" value={c.airtable.base} placeholder="app…" /></label>
       <label class={label}>Table <input class={inputClass} name="config.airtable.table" value={c.airtable.table} placeholder="Submissions" /></label>
     </div>
-    <p class={hint}>Airtable: a personal access token with data.records:write on the base. Field names must match the table's columns.</p>
+    <p class={hint}>Airtable: a personal access token with data.records:write on the base. Name the columns like the form's fields (name or Name); fields without a column are left out.</p>
     <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
   </form>
 </div>

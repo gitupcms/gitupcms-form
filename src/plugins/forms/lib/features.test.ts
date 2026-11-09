@@ -54,3 +54,34 @@ test("channel text is cut to the limit and keeps the link", () => {
   assert.ok(text.length <= 300);
   assert.ok(text.endsWith("https://app/s/1"));
 });
+
+test("Airtable leaves out fields the table has no column for; Sheets needs the script's ok", async () => {
+  const { channels } = await import("./channels.ts");
+  const real = globalThis.fetch;
+  const columns = new Set(["Name"]);
+  const sent: any[] = [];
+  globalThis.fetch = (async (url: string, init: any) => {
+    if (String(url).includes("airtable")) {
+      const fields = JSON.parse(init.body).records[0].fields;
+      const bad = Object.keys(fields).find((k) => !columns.has(k));
+      if (bad) return new Response(JSON.stringify({ error: { type: "UNKNOWN_FIELD_NAME", message: `Unknown field name: "${bad}"` } }), { status: 422 });
+      sent.push(fields);
+      return new Response("{}", { status: 200 });
+    }
+    if (String(url).includes("script.google.com")) return new Response(null, { status: 302, headers: { location: "https://script.googleusercontent.com/echo" } });
+    return new Response(sent.length ? "ok" : "<html>Error: TypeError</html>");
+  }) as any;
+  try {
+    const c = { ...defaults(), airtable: { token: "pat1", base: "app1", table: "T" }, sheets: "https://script.google.com/macros/s/x/exec" };
+    const all = channels(c, { form: "F", data: { name: "Ada", email: "a@b.co" }, files: [], url: "u", createdAt: "" });
+    const air = all.find((ch) => ch.kind === "airtable")!;
+    const sheet = all.find((ch) => ch.kind === "sheets")!;
+    assert.match(await air.run(), /no column for: Email/);
+    assert.deepEqual(sent, [{ Name: "Ada" }]);
+    assert.equal(await sheet.run(), "row added");
+    sent.length = 0;
+    await assert.rejects(sheet.run(), /did not add the row/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
