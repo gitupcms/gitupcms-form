@@ -1,0 +1,104 @@
+# Gitupcms Forms
+
+A self-hosted backend for HTML forms. Point any form's `action` at your server and submissions land in your
+admin panel and your email. No server code on your site, no API key in the page.
+
+- Plain HTML posts, `fetch` with JSON replies, file uploads
+- Spam: hidden honeypot field, link and duplicate checks, per-visitor rate limit, your own blocklist
+- Email with Reply-To set to the sender, and a "mark as spam" link
+- Signed webhooks, CSV export, search, a delivery log per submission
+- Everything in a SQLite file on your server; uploaded files next to it
+
+## Run it
+
+Needs Node 22+. From npm, in a folder with your `.env` (see `.env.example`; the database goes in `data/`):
+
+```sh
+npx @gitupcms/forms   # HOST and PORT pick the address (default localhost:4321)
+```
+
+Or from source, with pnpm:
+
+```sh
+cp .env.example .env    # set BETTER_AUTH_URL and BETTER_AUTH_SECRET at least
+pnpm install
+pnpm build
+node --env-file=.env dist/server/entry.mjs
+```
+
+Or with Docker:
+
+```sh
+docker build -t gitupcms-forms .
+docker run -d -p 4321:4321 -v gitupcms-forms-data:/data --env-file .env gitupcms-forms
+```
+
+Put it behind HTTPS (Caddy, nginx…) at the address in `BETTER_AUTH_URL`. Behind a reverse proxy, set
+`TRUST_PROXY=1` so rate limits see visitors' addresses; only when the proxy overwrites `X-Forwarded-For`.
+
+Open the address. The first account you create is the admin; after that only invited people can sign up
+(**Team**). Back up the database file (`DB_PATH`, default `data/gitupcms-forms.db`) and the `files` folder.
+
+## Connect a form
+
+**Add form**, then copy its address from **Setup**:
+
+```html
+<form action="https://forms.example.com/f/YOUR_KEY" method="POST">
+  <input name="email" type="email" required>
+  <textarea name="message" required></textarea>
+  <input name="_gotcha" style="display:none" tabindex="-1" autocomplete="off">
+  <button>Send</button>
+</form>
+```
+
+Field names become the columns of the inbox. For files add `enctype="multipart/form-data"` (limit:
+`MAX_UPLOAD_MB`, 10 files). Send with `fetch` and `Accept: application/json` to get `{"ok":true,"id":"…"}`
+or `{"ok":false,"error":"…"}` instead of a page.
+
+Special fields (not stored):
+
+| Field | What |
+| --- | --- |
+| `_redirect` | Where to go after sending; same site only. The form's own setting wins. |
+| `_subject` | Subject of the notification email |
+| `_replyto` | Address replies go to (else the `email` field) |
+| `_gotcha` | Hidden spam trap: a filled one means spam |
+
+Spam gets the same reply as a real post, so bots learn nothing. It waits in the Spam tab and is never emailed.
+
+**Settings → Allowed sites** limits who may post: those domains and their subdomains. Once set, posts without
+an `Origin`/`Referer` (scripts, curl) are refused.
+
+## Webhooks
+
+Each submission that is not spam is POSTed as JSON to the form's webhook, retried once on failure:
+
+```json
+{ "event": "submission.created", "form": { "key": "…", "name": "…" },
+  "submission": { "id": "…", "createdAt": "…", "data": { … }, "files": [ … ], "url": "…" } }
+```
+
+The `X-Gitupcms-Signature` header is `t=<unix time>,v1=<hex>`. Verify it with the secret from Settings:
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+const [, t, v1] = /t=(\d+),v1=([0-9a-f]+)/.exec(header);
+const ok = Math.abs(Date.now() / 1000 - t) < 300 &&
+  timingSafeEqual(Buffer.from(v1), Buffer.from(createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex")));
+```
+
+## Code
+
+| Path | What |
+| --- | --- |
+| `src/plugins/forms/api/` | The public endpoint `/f/<key>` and the email "mark as spam" link |
+| `src/plugins/forms/lib/` | Parsing, spam scoring, storage, email and webhook delivery, CSV |
+| `src/pages/`, `src/components/` | Admin panel and its API |
+| `src/lib/` | Admin sign-in, team, database, SMTP (shared with Gitupcms comments) |
+
+```sh
+pnpm dev     # http://localhost:4321
+pnpm check   # types
+pnpm test
+```

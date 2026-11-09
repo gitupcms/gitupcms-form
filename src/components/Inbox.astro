@@ -1,0 +1,66 @@
+---
+import { button, inputClass } from "@/components/ui/island";
+import { PAGE, submissions, type Form, type Submission } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+  status: "inbox" | "spam";
+}
+const { form, status } = Astro.props;
+const q = (Astro.url.searchParams.get("q") ?? "").slice(0, 200);
+const page = Math.max(1, Number(Astro.url.searchParams.get("page")) || 1);
+const { total, items } = submissions(form.key, status, q, page);
+const pages = Math.max(1, Math.ceil(total / PAGE));
+const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(s * 1000);
+const preview = (s: Submission) =>
+  Object.entries(s.data)
+    .filter(([, v]) => [v].flat().join("").trim())
+    .slice(0, 3)
+    .map(([k, v]) => `${k}: ${[v].flat().join(", ")}`)
+    .join(" · ")
+    .slice(0, 160) || "(empty)";
+const link = (p: number) => `?tab=${status}${q ? `&q=${encodeURIComponent(q)}` : ""}&page=${p}`;
+---
+
+<div class="flex flex-col gap-4">
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <form class="flex gap-2" method="get">
+      <input type="hidden" name="tab" value={status} />
+      <input class={inputClass} name="q" value={q} placeholder="Search submissions" aria-label="Search submissions" />
+      <button class={button("outline")}>Search</button>
+    </form>
+    <a class={button("outline")} href={`/api/forms/${form.key}/export?status=${status}`} download>Export CSV</a>
+  </div>
+  {status === "spam" && <p class="text-muted-foreground text-sm">Spam is kept, but nothing is emailed or sent on for it. Open one to see why it was flagged.</p>}
+  {
+    items.length === 0 ? (
+      <p class="text-muted-foreground rounded-lg border p-6 text-center text-sm">
+        {q ? "Nothing matches that search." : status === "spam" ? "No spam." : "No submissions yet. The Setup tab shows how to connect your form."}
+      </p>
+    ) : (
+      <ul class="divide-y rounded-lg border">
+        {items.map((s) => (
+          <li>
+            <a href={`/forms/${form.key}/${s.id}`} class="hover:bg-muted flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <span class="min-w-0 truncate">{preview(s)}</span>
+              <span class="text-muted-foreground flex shrink-0 items-center gap-2 text-xs">
+                {s.files.length > 0 && <span>{s.files.length} file{s.files.length > 1 ? "s" : ""}</span>}
+                {status === "spam" && <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">score {s.score}</span>}
+                {date(s.createdAt)}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+  {
+    pages > 1 && (
+      <nav class="flex items-center justify-between text-sm" aria-label="Pages">
+        {page > 1 ? <a class={button("outline", "sm")} href={link(page - 1)}>Newer</a> : <span />}
+        <span class="text-muted-foreground">Page {page} of {pages} · {total} total</span>
+        {page < pages ? <a class={button("outline", "sm")} href={link(page + 1)}>Older</a> : <span />}
+      </nav>
+    )
+  }
+</div>

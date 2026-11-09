@@ -1,0 +1,54 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/island";
+import { forms } from "@/plugins/forms/lib/forms";
+
+const all = forms();
+const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(s * 1000);
+---
+
+<Admin title="Forms">
+  <div class="flex flex-col gap-6">
+    <div>
+      <h1 class="text-lg font-medium tracking-tight">Forms</h1>
+      <p class="text-muted-foreground text-sm">Each form is an address your site's HTML form posts to. Submissions land here and in your email.</p>
+    </div>
+    {
+      all.length > 0 && (
+        <ul class="divide-y rounded-lg border">
+          {all.map((f) => (
+            <li>
+              <a href={`/forms/${f.key}`} class="hover:bg-muted flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span class="flex flex-col">
+                  <strong class="font-medium">{f.name}</strong>
+                  <span class="text-muted-foreground text-xs">{f.domains || "Any site"} · {f.lastAt ? `last ${date(f.lastAt)}` : "no submissions yet"}</span>
+                </span>
+                <span class="text-muted-foreground text-xs">{f.inbox} in inbox</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-create>
+      <label class="flex flex-1 flex-col gap-1 text-sm">Name <input class={inputClass} name="name" placeholder="Contact form" required maxlength="100" /></label>
+      <Button type="submit">Add form</Button>
+    </form>
+    <p role="alert" class="text-destructive text-sm empty:hidden" data-error></p>
+  </div>
+</Admin>
+
+<script>
+  import { post } from "@/lib/post";
+  const form = document.querySelector<HTMLFormElement>("[data-create]")!;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const { key } = await post("/api/forms", Object.fromEntries(new FormData(form)));
+      location.href = `/forms/${key}?tab=setup`;
+    } catch (err: any) {
+      document.querySelector("[data-error]")!.textContent = err.message;
+    }
+  });
+</script>

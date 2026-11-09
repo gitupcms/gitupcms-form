@@ -1,0 +1,29 @@
+---
+import { tabList, tabTrigger } from "@/components/ui/island";
+import { appOrigin } from "@/lib/admin";
+import { counts, type Form } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+  tab: "inbox" | "spam" | "setup" | "settings" | null;
+}
+const { form, tab } = Astro.props;
+const n = counts(form.key);
+const tabs = [
+  ["inbox", `Inbox${n.inbox ? ` (${n.inbox})` : ""}`],
+  ["spam", `Spam${n.spam ? ` (${n.spam})` : ""}`],
+  ["setup", "Setup"],
+  ["settings", "Settings"],
+] as const;
+---
+
+<div class="flex flex-col gap-4">
+  <div>
+    <a href="/" class="text-muted-foreground hover:text-foreground text-xs">← Forms</a>
+    <h1 class="text-lg font-medium tracking-tight">{form.name}</h1>
+    <p class="text-muted-foreground font-mono text-xs">POST {appOrigin}/f/{form.key}</p>
+  </div>
+  <nav class={tabList} aria-label="Form">
+    {tabs.map(([id, label]) => <a href={`/forms/${form.key}?tab=${id}`} class={tabTrigger} data-state={tab === id ? "active" : undefined} aria-current={tab === id ? "page" : undefined}>{label}</a>)}
+  </nav>
+</div>

@@ -1,0 +1,122 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import FormHeader from "@/components/FormHeader.astro";
+import { button, sectionLabel } from "@/components/ui/island";
+import { deliveries, formByKey, submissionById } from "@/plugins/forms/lib/forms";
+import { THRESHOLD } from "@/plugins/forms/lib/spam";
+
+const form = formByKey(Astro.params.key ?? "");
+const sub = form ? submissionById(Astro.params.id ?? "") : null;
+if (!form || !sub || sub.formKey !== form.key) return Astro.redirect(form ? `/forms/${form.key}` : "/");
+const log = deliveries(sub.id);
+const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "medium" }).format(s * 1000);
+const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+---
+
+<Admin title={form.name}>
+  <div class="flex flex-col gap-6">
+    <FormHeader form={form} tab={sub.status} />
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="text-muted-foreground text-sm">
+        {date(sub.createdAt)}{sub.origin && ` · from ${sub.origin}`}{sub.status === "spam" && " · in Spam"}
+      </p>
+      <div class="flex gap-2">
+        {sub.replyTo && <a class={button("outline", "sm")} href={`mailto:${sub.replyTo}`}>Reply</a>}
+        {sub.status === "inbox" && <button class={button("outline", "sm")} data-action="resend">Send again</button>}
+        <button class={button("outline", "sm")} data-action="status" data-status={sub.status === "spam" ? "inbox" : "spam"}>{sub.status === "spam" ? "Not spam" : "Mark as spam"}</button>
+        <button class={button("destructive", "sm")} data-action="delete">Delete</button>
+      </div>
+    </div>
+    <p role="alert" class="text-destructive text-sm empty:hidden" data-error></p>
+
+    <dl class="divide-y rounded-lg border text-sm">
+      {
+        Object.entries(sub.data).map(([k, v]) => (
+          <div class="grid gap-1 px-4 py-3 sm:grid-cols-[12rem_1fr]">
+            <dt class="text-muted-foreground font-mono text-xs">{k}</dt>
+            <dd class="break-words whitespace-pre-wrap">{[v].flat().join(", ") || "—"}</dd>
+          </div>
+        ))
+      }
+      {Object.keys(sub.data).length === 0 && <p class="text-muted-foreground px-4 py-3">No fields.</p>}
+    </dl>
+
+    {
+      sub.files.length > 0 && (
+        <section class="flex flex-col gap-2">
+          <h2 class={sectionLabel}>Files</h2>
+          <ul class="divide-y rounded-lg border text-sm">
+            {sub.files.map((f, n) => (
+              <li class="flex items-center justify-between gap-3 px-4 py-2">
+                <span class="min-w-0 truncate">
+                  {f.name} <span class="text-muted-foreground text-xs">({f.field}, {size(f.size)})</span>
+                </span>
+                <a class={button("outline", "sm")} href={`/api/forms/${form.key}/files/${sub.id}/${n}`}>Download</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <section class="flex flex-col gap-2">
+      <h2 class={sectionLabel}>Spam check: score {sub.score} (spam at {THRESHOLD})</h2>
+      {
+        sub.signals.length ? (
+          <ul class="divide-y rounded-lg border text-sm">
+            {sub.signals.map((s) => (
+              <li class="flex justify-between gap-3 px-4 py-2">
+                <span>{s.reason}</span>
+                <span class="text-muted-foreground">+{s.points}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="text-muted-foreground text-sm">No spam signals.</p>
+        )
+      }
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class={sectionLabel}>Deliveries</h2>
+      {
+        log.length ? (
+          <ul class="divide-y rounded-lg border text-sm">
+            {log.map((d) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-2">
+                <span class="min-w-0 truncate">
+                  {d.kind === "email" ? "Email" : "Webhook"} → {d.target}
+                </span>
+                <span class="flex items-center gap-2 text-xs">
+                  <span class={d.ok ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300" : "text-destructive"}>{d.ok ? d.detail : `Failed: ${d.detail}`}</span>
+                  <span class="text-muted-foreground">{date(d.at)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="text-muted-foreground text-sm">
+            {sub.status === "spam" ? "Nothing is sent for spam." : "Nothing sent yet: add recipients or a webhook in Settings, then Send again."}
+          </p>
+        )
+      }
+    </section>
+  </div>
+</Admin>
+
+<script define:vars={{ key: form.key, id: sub.id }}>
+  document.querySelectorAll("[data-action]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const action = b.dataset.action;
+      if (action === "delete" && !confirm("Delete this submission and its files?")) return;
+      b.disabled = true;
+      const res = await fetch(`/api/forms/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, id, status: b.dataset.status }) });
+      const json = await res.json().catch(() => ({ error: "Unexpected response." }));
+      if (!res.ok) {
+        document.querySelector("[data-error]").textContent = json.error;
+        b.disabled = false;
+      } else if (action === "delete") location.href = `/forms/${key}`;
+      else location.reload();
+    }),
+  );
+</script>

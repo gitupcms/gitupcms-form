@@ -1,0 +1,22 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import FormHeader from "@/components/FormHeader.astro";
+import Inbox from "@/components/Inbox.astro";
+import Setup from "@/components/Setup.astro";
+import Settings from "@/components/Settings.astro";
+import { formByKey } from "@/plugins/forms/lib/forms";
+
+const form = formByKey(Astro.params.key ?? "");
+if (!form) return Astro.redirect("/");
+const asked = Astro.url.searchParams.get("tab");
+const tab = asked === "spam" || asked === "setup" || asked === "settings" ? asked : "inbox";
+---
+
+<Admin title={form.name}>
+  <div class="flex flex-col gap-6">
+    <FormHeader form={form} tab={tab} />
+    {(tab === "inbox" || tab === "spam") && <Inbox form={form} status={tab} />}
+    {tab === "setup" && <Setup form={form} />}
+    {tab === "settings" && <Settings form={form} />}
+  </div>
+</Admin>

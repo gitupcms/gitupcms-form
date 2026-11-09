@@ -1,0 +1,64 @@
+---
+import Base from "@/layouts/Base.astro";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { inputClass } from "@/components/ui/island";
+import { adminOf, githubEnabled, hasAdmin } from "@/lib/admin";
+import { inviteEmail } from "@/lib/team";
+
+if (await adminOf(Astro.request.headers)) return Astro.redirect("/");
+const invite = inviteEmail(Astro.url.searchParams.get("invite") ?? "");
+const setup = !hasAdmin() || !!invite;
+const error = Astro.url.searchParams.get("error");
+---
+
+<Base title={setup ? "Set up" : "Sign in"}>
+  <main class="grid min-h-screen place-items-center p-4">
+    <Card class="w-full max-w-sm">
+      <CardHeader>
+        <CardTitle>{invite ? "Join Gitupcms Forms" : setup ? "Create the admin account" : "Sign in to Gitupcms Forms"}</CardTitle>
+        <CardDescription>
+          {invite ? `You were invited as ${invite}. Choose a password, or use the GitHub account with this email.` : setup ? "The first account runs this server. After it, only invited people can join." : "Form submissions for your sites, on your own server."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form class="flex flex-col gap-3" data-form={setup ? "sign-up" : "sign-in"}>
+          {setup && <input class={inputClass} name="name" placeholder="Your name" autocomplete="name" required aria-label="Name" />}
+          <input class={inputClass} name="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email" value={invite ?? undefined} readonly={!!invite} />
+          <input class={inputClass} name="password" type="password" placeholder={setup ? "Password (10+ characters)" : "Password"} minlength={setup ? 10 : undefined} autocomplete={setup ? "new-password" : "current-password"} required aria-label="Password" />
+          <Button type="submit">{setup ? "Create account" : "Sign in"}</Button>
+          {githubEnabled && <Button type="button" variant="outline" data-github>{setup ? "Continue with GitHub" : "Sign in with GitHub"}</Button>}
+          <p role="alert" class="text-destructive text-sm empty:hidden" data-error>{error ? (error === "unable_to_create_user" ? "Only invited people can join. Ask an admin for an invite (with the same email as your GitHub account)." : error.replace(/_/g, " ")) : ""}</p>
+        </form>
+      </CardContent>
+    </Card>
+  </main>
+</Base>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("[data-form]")!;
+  const error = document.querySelector<HTMLElement>("[data-error]")!;
+  const call = async (path: string, body: object) => {
+    const res = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.message || "Something went wrong.");
+    return json;
+  };
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    error.textContent = "";
+    try {
+      await call(`${form.dataset.form}/email`, Object.fromEntries(new FormData(form)));
+      location.href = "/";
+    } catch (err: any) {
+      error.textContent = err.message;
+    }
+  });
+  document.querySelector("[data-github]")?.addEventListener("click", async () => {
+    try {
+      location.href = (await call("sign-in/social", { provider: "github", callbackURL: "/" })).url;
+    } catch (err: any) {
+      error.textContent = err.message;
+    }
+  });
+</script>

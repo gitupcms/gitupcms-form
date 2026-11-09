@@ -1,0 +1,115 @@
+---
+import { button, sectionLabel } from "@/components/ui/island";
+import { appOrigin } from "@/lib/admin";
+import type { Form } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+}
+const { form } = Astro.props;
+const endpoint = `${appOrigin}/f/${form.key}`;
+
+const html = `<form id="contact" action="${endpoint}" method="POST">
+  <input name="name" placeholder="Name" required>
+  <input name="email" type="email" placeholder="Email" required>
+  <textarea name="message" placeholder="Message" required></textarea>
+  <!-- Spam trap: people never see it, bots fill it in -->
+  <input name="_gotcha" style="display:none" tabindex="-1" autocomplete="off">
+  <button type="submit">Send</button>
+</form>`;
+
+const files = `<form action="${endpoint}" method="POST" enctype="multipart/form-data">
+  <input name="email" type="email" required>
+  <input name="cv" type="file">
+  <button type="submit">Apply</button>
+</form>`;
+
+const ajax = `<script>
+  document.querySelector("#contact").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const res = await fetch(e.target.action, { method: "POST", body: new FormData(e.target), headers: { Accept: "application/json" } });
+    const json = await res.json();
+    e.target.replaceWith(json.ok ? "Thanks, we got your message." : json.error);
+  });
+</script>`;
+
+const prompt = `Connect the contact form on my site to my form backend.
+- Set the form's action to ${endpoint} and method to POST. No server code or API key is needed.
+- Every input needs a name attribute; the names become the field names in the inbox.
+- Name the sender's email field "email" so replies go to them.
+- Add a hidden spam trap: <input name="_gotcha" style="display:none" tabindex="-1" autocomplete="off">.
+- For file inputs, add enctype="multipart/form-data" to the form.
+- To show a thank-you page of the site after sending, add <input type="hidden" name="_redirect" value="/thanks"> (same site only).
+- For sending without a page reload, POST the FormData with fetch and the header Accept: application/json; the reply is {"ok":true} or {"ok":false,"error":"..."}.`;
+
+const blocks = [
+  ["HTML form", "Any site, any framework (Astro, React, plain HTML). Field names become columns in the inbox.", html],
+  ["With file uploads", "Add enctype=\"multipart/form-data\". Files are stored on this server; the email links to them.", files],
+  ["Without a page reload", "Send the form with fetch and ask for JSON.", ajax],
+  ["Prompt for AI coding tools", "Paste into Cursor, Claude Code, v0 or Bolt to wire up an existing form.", prompt],
+] as const;
+---
+
+<div class="flex flex-col gap-6">
+  <section class="flex flex-col gap-3 rounded-lg border p-4">
+    <h2 class={sectionLabel}>Endpoint</h2>
+    <div class="flex items-center gap-2">
+      <code class="bg-muted min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-xs">{endpoint}</code>
+      <button class={button("outline", "sm")} data-copy={endpoint}>Copy</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <button class={button("primary")} data-test>Send a test submission</button>
+      <span class="text-muted-foreground text-sm" data-result>It goes through the same checks as a real one and lands in the inbox.</span>
+    </div>
+  </section>
+  {
+    blocks.map(([title, text, code]) => (
+      <section class="flex flex-col gap-2 rounded-lg border p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-medium">{title}</h2>
+            <p class="text-muted-foreground text-sm">{text}</p>
+          </div>
+          <button class={button("outline", "sm")} data-copy={code}>Copy</button>
+        </div>
+        <pre class="bg-muted overflow-x-auto rounded-lg p-3 text-xs whitespace-pre-wrap"><code>{code}</code></pre>
+      </section>
+    ))
+  }
+  <section class="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+    <h2 class="font-medium">Special fields</h2>
+    <ul class="text-muted-foreground list-disc pl-5">
+      <li><code>_redirect</code>: where to send people after a post (same site only; the form's own setting wins).</li>
+      <li><code>_subject</code>: the subject of the notification email.</li>
+      <li><code>_replyto</code>: the address replies go to (else the <code>email</code> field).</li>
+      <li><code>_gotcha</code>: the hidden spam trap. Other names starting with <code>_</code> are not stored.</li>
+    </ul>
+  </section>
+</div>
+
+<script define:vars={{ endpoint, key: form.key }}>
+  document.querySelectorAll("[data-copy]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(b.dataset.copy);
+      const old = b.textContent;
+      b.textContent = "Copied";
+      setTimeout(() => (b.textContent = old), 1500);
+    }),
+  );
+  const result = document.querySelector("[data-result]");
+  document.querySelector("[data-test]").addEventListener("click", async () => {
+    result.textContent = "Sending…";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ name: "Test sender", message: `Test submission from the Setup page, ${new Date().toLocaleString()}` }),
+    });
+    const json = await res.json().catch(() => ({ ok: false, error: "Unexpected response." }));
+    result.replaceChildren();
+    const status = Object.assign(document.createElement("span"), { textContent: `${res.status} ${json.ok ? "OK" : "Error"}` });
+    status.className = json.ok ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300" : "text-destructive";
+    result.append(status, " ");
+    if (json.ok) result.append(Object.assign(document.createElement("a"), { href: `/forms/${key}/${json.id}`, textContent: "It arrived: open it", className: "underline" }));
+    else result.append(json.error);
+  });
+</script>
