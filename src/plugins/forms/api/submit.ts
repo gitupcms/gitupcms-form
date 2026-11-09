@@ -10,7 +10,6 @@ import { parseSubmission } from "../lib/parse";
 import { deliver } from "../lib/deliver";
 import { page } from "../lib/page";
 import { checkCaptcha } from "../lib/captcha";
-import { checkAgainstBuilder } from "../lib/builder";
 
 const env = (name: string) => process.env[name] ?? import.meta.env?.[name];
 
@@ -45,18 +44,8 @@ export const OPTIONS: APIRoute = ({ params, request }) => {
   return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type, Accept", "Access-Control-Max-Age": "86400" } });
 };
 
-const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-/** A builder form is also a page of its own here (a link to share); otherwise this explains the endpoint. */
 export const GET: APIRoute = ({ params }) => {
   const form = formByKey(params.key ?? "");
-  if (form?.config.builder.enabled && form.config.active)
-    return new Response(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(form.config.builder.title || form.name)}</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fafafa;padding:2rem 1rem}@media(prefers-color-scheme:dark){body{background:#09090b}}div{width:100%;max-width:36rem}</style></head>
-<body><div data-gitupcms-form="${form.key}"></div><script src="/f/${form.key}/embed.js"></script></body></html>`,
-      { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
-    );
   return page(form ? "This is a form endpoint" : "Form not found", form ? "Point an HTML form's action here with method=\"POST\"." : "Check the address in your form's action.", form ? 200 : 404);
 };
 
@@ -80,7 +69,6 @@ export const POST: APIRoute = async ({ params, request, clientAddress }) => {
       const captchaError = await checkCaptcha(form.config.captcha, form.key, parsed.options.captcha, ip);
       if (captchaError) throw new HttpError(captchaError, 400);
     }
-    if (form.config.builder.enabled) checkAgainstBuilder(form.config.builder, parsed);
     const sub = await saveSubmission(form, parsed, { ip, origin: origin ?? "", recentFromIp });
     if (sub.status === "inbox") deliver(form, sub).catch((e) => console.error("Delivery failed:", e));
     if (json) return Response.json({ ok: true, id: sub.id }, { headers });

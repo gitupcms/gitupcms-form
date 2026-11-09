@@ -1,6 +1,6 @@
 /**
  * Gitupcms Forms: a backend for plain HTML forms. This integration adds the public routes (the endpoint, its
- * embed script and Altcha puzzles, and the "mark as spam" link); the admin pages live in the host app.
+ * Altcha puzzles, and the "mark as spam" link); the admin pages live in the host app.
  */
 import type { AstroIntegration } from "astro";
 
@@ -8,7 +8,6 @@ const ROUTES: [pattern: string, file: string][] = [
   ["/f/spam", "./api/spam.ts"],
   ["/f/[key]", "./api/submit.ts"],
   ["/f/[key]/altcha", "./api/altcha.ts"],
-  ["/f/[key]/embed.js", "./api/embed.ts"],
 ];
 
 export default (): AstroIntegration => ({

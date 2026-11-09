@@ -7,7 +7,6 @@ const { applyRules } = await import("./rules.ts");
 const { altchaChallenge, verifyAltcha } = await import("./captcha.ts");
 const { defaults, patchConfig, forAdmin } = await import("./config.ts");
 const { plainText } = await import("./channels.ts");
-const { checkAgainstBuilder } = await import("./builder.ts");
 
 const rule = ({ name = "r", ...over }: any) => ({ name, match: "all", conditions: [{ field: "topic", op: "equals", value: "Sales" }], actions: { to: "", subject: "", webhook: "", spam: false, stop: false, ...over } });
 
@@ -48,20 +47,10 @@ test("config: validation, and secrets kept when the admin leaves them empty", ()
   assert.throws(() => patchConfig(defaults(), { slack: "https://evil.example/hook" }), /Slack/);
   assert.throws(() => patchConfig(defaults(), { nope: 1 }), /Unknown setting/);
   assert.throws(() => patchConfig(defaults(), { rules: [rule({})] }), /does nothing/);
-  assert.throws(() => patchConfig(defaults(), { builder: { enabled: true, fields: [{ type: "text", name: "_x" }] } }), /Field name/);
 });
 
 test("channel text is cut to the limit and keeps the link", () => {
   const text = plainText({ form: "Contact", data: { message: "x".repeat(5000) }, files: [], url: "https://app/s/1", createdAt: "" }, 300);
   assert.ok(text.length <= 300);
   assert.ok(text.endsWith("https://app/s/1"));
-});
-
-test("builder check refuses missing and malformed fields", () => {
-  const b = { ...defaults().builder, fields: [{ type: "email", name: "email", label: "Email", required: true, placeholder: "", options: [] }, { type: "select", name: "plan", label: "Plan", required: false, placeholder: "", options: ["a", "b"] }] } as any;
-  const parsed = (data: any) => ({ data, files: [], options: {} }) as any;
-  assert.throws(() => checkAgainstBuilder(b, parsed({})), /required/);
-  assert.throws(() => checkAgainstBuilder(b, parsed({ email: "nope" })), /email/);
-  assert.throws(() => checkAgainstBuilder(b, parsed({ email: "a@b.co", plan: "c" })), /options/);
-  assert.doesNotThrow(() => checkAgainstBuilder(b, parsed({ email: "a@b.co", plan: "a" })));
 });

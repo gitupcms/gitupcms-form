@@ -49,9 +49,7 @@ const testNote = !form.config.active
   ? "The form is paused (Settings), so the test will be refused."
   : form.config.captcha.provider
     ? "CAPTCHA is on (Security), so the test will be refused: it cannot solve one."
-    : form.config.builder.enabled && form.config.builder.fields.some((f) => f.required && !["name", "message"].includes(f.name))
-      ? "The builder form has other required fields, so the test may be refused."
-      : "";
+    : "";
 
 const blocks = [
   ["HTML form", "Any site, any framework (Astro, React, plain HTML). Field names become columns in the inbox.", html],

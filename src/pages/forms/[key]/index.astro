@@ -3,7 +3,6 @@ import Admin from "@/layouts/Admin.astro";
 import FormHeader from "@/components/FormHeader.astro";
 import Inbox from "@/components/Inbox.astro";
 import Setup from "@/components/Setup.astro";
-import Builder from "@/components/Builder.astro";
 import Delivery from "@/components/Delivery.astro";
 import Rules from "@/components/Rules.astro";
 import Security from "@/components/Security.astro";
@@ -12,7 +11,7 @@ import { formByKey } from "@/plugins/forms/lib/forms";
 
 const form = formByKey(Astro.params.key ?? "");
 if (!form) return Astro.redirect("/");
-const TABS = ["inbox", "spam", "setup", "builder", "delivery", "rules", "security", "settings"] as const;
+const TABS = ["inbox", "spam", "setup", "delivery", "rules", "security", "settings"] as const;
 const asked = Astro.url.searchParams.get("tab") as (typeof TABS)[number];
 const tab = TABS.includes(asked) ? asked : "inbox";
 ---
@@ -22,7 +21,6 @@ const tab = TABS.includes(asked) ? asked : "inbox";
     <FormHeader form={form} tab={tab} />
     {(tab === "inbox" || tab === "spam") && <Inbox form={form} status={tab} />}
     {tab === "setup" && <Setup form={form} />}
-    {tab === "builder" && <Builder form={form} />}
     {tab === "delivery" && <Delivery form={form} />}
     {tab === "rules" && <Rules form={form} />}
     {tab === "security" && <Security form={form} />}

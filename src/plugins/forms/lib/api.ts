@@ -39,7 +39,7 @@ export const TOOLS: Tool[] = [
     inputSchema: obj(FORM, ["form"]),
     run: (a) => {
       const f = formOf(a);
-      return { key: f.key, name: f.name, active: f.config.active, recipients: list(f.recipients), domains: list(f.domains), retentionDays: f.retentionDays, captcha: f.config.captcha.provider || null, rules: f.config.rules, builderFields: f.config.builder.enabled ? f.config.builder.fields : null };
+      return { key: f.key, name: f.name, active: f.config.active, recipients: list(f.recipients), domains: list(f.domains), retentionDays: f.retentionDays, captcha: f.config.captcha.provider || null, rules: f.config.rules };
     },
   },
   {

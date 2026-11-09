@@ -1,15 +1,13 @@
 /**
- * A form's settings beyond its columns: spam, CAPTCHA, channels, rules, auto-reply and the builder.
+ * A form's settings beyond its columns: spam, CAPTCHA, channels, rules and auto-reply.
  * Stored as one encrypted JSON blob (it holds tokens), always read through `withDefaults`.
  */
 import { HttpError } from "../../../lib/http.ts";
 
 export const CAPTCHAS = ["", "turnstile", "hcaptcha", "recaptcha", "altcha"] as const;
 export const SENSITIVITY = { low: 70, medium: 50, high: 30 } as const;
-export const FIELD_TYPES = ["text", "email", "textarea", "number", "tel", "url", "date", "select", "checkbox", "file"] as const;
 export const OPS = ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty"] as const;
 
-export type Field = { type: (typeof FIELD_TYPES)[number]; name: string; label: string; required: boolean; placeholder: string; options: string[] };
 export type Condition = { field: string; op: (typeof OPS)[number]; value: string };
 export type Rule = {
   name: string;
@@ -32,7 +30,6 @@ export type FormConfig = {
   airtable: { token: string; base: string; table: string };
   autoReply: { enabled: boolean; subject: string; body: string };
   rules: Rule[];
-  builder: { enabled: boolean; title: string; description: string; submit: string; success: string; fields: Field[] };
 };
 
 export const defaults = (): FormConfig => ({
@@ -49,7 +46,6 @@ export const defaults = (): FormConfig => ({
   airtable: { token: "", base: "", table: "" },
   autoReply: { enabled: false, subject: "We got your message", body: "Hi {{name}},\n\nThanks for writing to us. We will get back to you soon." },
   rules: [],
-  builder: { enabled: false, title: "", description: "", submit: "Send", success: "Thanks, your message was sent.", fields: [] },
 });
 
 /** Stored JSON (maybe from an older version) on top of the defaults, one level deep. */
@@ -87,21 +83,6 @@ const emails = (v: unknown, label: string) => {
   if (bad) throw new HttpError(`${label}: not an email address: ${bad}`, 400);
   return list.join(", ");
 };
-const NAME = /^[\w.\-\[\]]{1,100}$/;
-
-const field = (f: any): Field => {
-  const name = str(f?.name, 100);
-  if (!NAME.test(name) || name.startsWith("_")) throw new HttpError(`Field name "${name}" may use letters, digits, - and _ (not starting with _).`, 400);
-  return {
-    type: oneOf(f?.type, FIELD_TYPES, "field type"),
-    name,
-    label: str(f?.label, 200) || name,
-    required: bool(f?.required),
-    placeholder: str(f?.placeholder, 200),
-    options: (Array.isArray(f?.options) ? f.options : String(f?.options ?? "").split("\n")).map((o: unknown) => str(o, 200)).filter(Boolean).slice(0, 100),
-  };
-};
-
 const rule = (r: any, i: number): Rule => {
   const conditions = (Array.isArray(r?.conditions) ? r.conditions : []).slice(0, 10).map((c: any) => ({ field: str(c?.field, 100), op: oneOf(c?.op, OPS, "condition"), value: str(c?.value, 500) }));
   if (!conditions.length || conditions.some((c: Condition) => !c.field)) throw new HttpError(`Rule ${i + 1}: every condition needs a field.`, 400);
@@ -150,13 +131,6 @@ const sections: { [K in keyof FormConfig]: (v: any) => FormConfig[K] } = {
   },
   autoReply: (v) => ({ enabled: bool(v?.enabled), subject: str(v?.subject, 200) || "We got your message", body: str(v?.body, 5000) }),
   rules: (v) => (Array.isArray(v) ? v : []).slice(0, 25).map(rule),
-  builder: (v) => {
-    const fields = (Array.isArray(v?.fields) ? v.fields : []).slice(0, 50).map(field);
-    const dup = fields.find((f: Field, i: number) => fields.findIndex((g: Field) => g.name === f.name) !== i);
-    if (dup) throw new HttpError(`Two fields are named "${dup.name}".`, 400);
-    if (bool(v?.enabled) && !fields.length) throw new HttpError("Add at least one field before turning the form on.", 400);
-    return { enabled: bool(v?.enabled), title: str(v?.title, 200), description: str(v?.description, 1000), submit: str(v?.submit, 50) || "Send", success: str(v?.success, 500) || "Thanks, your message was sent.", fields };
-  },
 };
 
 /** Secret field, and the field that says the section is still in use. */

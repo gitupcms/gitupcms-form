@@ -54,7 +54,7 @@ dashboard'u (koyu, tablo + Spam rozeti) inbox için iyi bir referans.
 | Business/müşteri inbox | lead mgmt | – | ✓ | sonra |
 | AI prompt generator | – | – | ✓ | ✓ (kurulum ekranında kopyala) |
 | MCP / AI Reply | ✓ | – | – | yok (şimdilik) |
-| Görsel form builder | ✓ | – | – | ✓ (basit: alanlar + embed) |
+| Görsel form builder | ✓ | – | – | yok: formu site (ya da AI ajanı) yazar; Setup'taki prompt yeter |
 | Self-host / açık kaynak | – | – | – | **✓** |
 
 ---
@@ -93,7 +93,6 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 - Kurallar (koşul → alıcı/konu/ek webhook/spam/dur) ve kaydetmeden dry-run.
 - Webhook kimlik doğrulama: Bearer, Basic, özel başlık (imza ile birlikte).
 - Ortak gelen kutusu (`/inbox`), REST API (`/api/v1`, Bearer `gf_…` anahtar) ve MCP (`/mcp`).
-- Görsel form builder: alanlar, embed script, barındırılan sayfa `/f/<key>`, sunucuda alan kontrolü.
 
 ## 4b. Gizlilik (GDPR / KVKK), hem self-host hem cloud — yapıldı
 
@@ -106,7 +105,7 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 
 ## 5. Yapmayacaklarımız
 
-- Koşullu alanlar, çok sayfalı formlar, ödeme alanı (HeyForm/OpnForm işi).
+- Görsel form builder ve embed: formu site ya da AI ajanı yazar (kullanıcı kararı, 2026-11-10).
 - AI Reply, lead pipeline. (Cloud için faturalandırma ve AB veri bölgesi cloud işinde ele alınacak.)
 
 ## 6. WuppyCMS ile ilişki

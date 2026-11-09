@@ -105,7 +105,6 @@ const ok = Math.abs(Date.now() / 1000 - t) < 300 &&
 
 ## Per form
 
-- **Builder**: make the form here; embed it with two lines or share its own page `/f/<key>`.
 - **Delivery**: email recipients, auto-reply, webhook, Slack, Discord, Telegram, Google Sheets, Notion, Airtable.
 - **Rules**: "when topic is sales, email sales@… with subject Lead: {{name}}", with a dry run.
 - **Security**: allowed domains (with a localhost exception), CAPTCHA (Turnstile, hCaptcha, reCAPTCHA, Altcha), spam sensitivity, blocklist.

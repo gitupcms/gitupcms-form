@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS delivery (
 // Added after the first schema: 0 keeps submissions until deleted by hand.
 const formColumns = (db.prepare("PRAGMA table_info(form)").all() as { name: string }[]).map((c) => c.name);
 if (!formColumns.includes("retention_days")) db.exec("ALTER TABLE form ADD COLUMN retention_days INTEGER NOT NULL DEFAULT 0");
-// Encrypted JSON: CAPTCHA, channels (with their tokens), rules, auto-reply, builder. See config.ts.
+// Encrypted JSON: CAPTCHA, channels (with their tokens), rules, auto-reply. See config.ts.
 if (!formColumns.includes("config")) db.exec("ALTER TABLE form ADD COLUMN config TEXT NOT NULL DEFAULT ''");
 db.exec(`
 CREATE TABLE IF NOT EXISTS api_key (
