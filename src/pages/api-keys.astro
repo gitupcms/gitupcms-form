@@ -1,0 +1,84 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import { Button } from "@/components/ui/button";
+import { button, inputClass } from "@/components/ui/island";
+import { appOrigin } from "@/lib/admin";
+import { apiKeys } from "@/plugins/forms/lib/forms";
+
+const keys = apiKeys();
+const date = (s: number | null) => (s ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(s * 1000) : "never");
+const mcp = JSON.stringify({ mcpServers: { "gitupcms-forms": { type: "http", url: `${appOrigin}/mcp`, headers: { Authorization: "Bearer gf_YOUR_KEY" } } } }, null, 2);
+const pre = "bg-muted overflow-x-auto rounded-lg p-3 text-xs whitespace-pre-wrap";
+---
+
+<Admin title="API keys">
+  <div class="flex flex-col gap-6">
+    <div>
+      <h1 class="text-lg font-medium tracking-tight">API keys</h1>
+      <p class="text-muted-foreground text-sm">For scripts and AI assistants: read submissions, mark spam, try rules. A key can do what an admin can in the inbox, so keep it secret.</p>
+    </div>
+    <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-create>
+      <label class="flex flex-1 flex-col gap-1 text-sm">Name <input class={inputClass} name="name" placeholder="Zapier, Claude, my script" required maxlength="60" /></label>
+      <Button type="submit">Create key</Button>
+      <span class="text-destructive text-sm" role="status" data-status></span>
+    </form>
+    <p class="hidden rounded-lg border border-emerald-500/40 p-4 text-sm" data-new>
+      Copy it now, it is not shown again: <code class="bg-muted rounded px-2 py-1 break-all" data-value></code>
+    </p>
+    {
+      keys.length > 0 && (
+        <ul class="divide-y rounded-lg border">
+          {keys.map((k) => (
+            <li class="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <span>
+                {k.name} <code class="text-muted-foreground text-xs">gf_…{k.hint}</code>
+              </span>
+              <span class="text-muted-foreground flex items-center gap-3 text-xs">
+                created {date(k.createdAt)} · used {date(k.lastUsedAt)}
+                <button class={button("outline", "sm")} data-revoke={k.id}>Revoke</button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    <section class="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+      <h2 class="font-medium">REST API</h2>
+      <p class="text-muted-foreground">Send the key as <code>Authorization: Bearer gf_…</code>. Replies are JSON.</p>
+      <pre class={pre}><code>{`GET    ${appOrigin}/api/v1/forms
+GET    ${appOrigin}/api/v1/forms/{key}
+GET    ${appOrigin}/api/v1/forms/{key}/submissions?status=inbox|spam&q=&page=1
+GET    ${appOrigin}/api/v1/submissions/{id}
+PATCH  ${appOrigin}/api/v1/submissions/{id}      {"status":"spam"}
+DELETE ${appOrigin}/api/v1/submissions/{id}
+POST   ${appOrigin}/api/v1/forms/{key}/rules/test {"data":{"topic":"sales"}}`}</code></pre>
+    </section>
+    <section class="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+      <h2 class="font-medium">MCP (Claude, Cursor and other AI tools)</h2>
+      <p class="text-muted-foreground">Add this server; it can list forms and submissions, open one, mark spam and try rules.</p>
+      <pre class={pre}><code>{mcp}</code></pre>
+    </section>
+  </div>
+</Admin>
+
+<script>
+  import { post } from "@/lib/post";
+  document.querySelector<HTMLFormElement>("[data-create]")!.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    try {
+      const key = await post("/api/api-keys", { action: "create", name: new FormData(form).get("name") });
+      document.querySelector("[data-value]")!.textContent = key;
+      document.querySelector("[data-new]")!.classList.remove("hidden");
+      form.reset();
+    } catch (err: any) {
+      form.querySelector("[data-status]")!.textContent = err.message;
+    }
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-revoke]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await post("/api/api-keys", { action: "revoke", id: b.dataset.revoke });
+      location.reload();
+    }),
+  );
+</script>

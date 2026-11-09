@@ -118,6 +118,10 @@ as long as Processor processes Customer Data.
 
 Fill in from the services the cloud actually uses; remove any it does not.
 
+Destinations Customer turns on for a form (Slack, Discord, Telegram, Google Sheets, Notion, Airtable, webhooks, a
+CAPTCHA provider) are not Processor's subprocessors: Customer chooses them, holds the contract with them, and
+instructs Processor to send Customer Data there.
+
 | Subprocessor | Purpose | Data | Location | Transfer safeguard |
 | --- | --- | --- | --- | --- |
 | Amazon Web Services EMEA SARL | Hosting, database, file storage, backups | All Customer Data (encrypted) | {{REGION}} | EU, no transfer |

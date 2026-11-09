@@ -1,0 +1,188 @@
+/**
+ * A form's settings beyond its columns: spam, CAPTCHA, channels, rules, auto-reply and the builder.
+ * Stored as one encrypted JSON blob (it holds tokens), always read through `withDefaults`.
+ */
+import { HttpError } from "../../../lib/http.ts";
+
+export const CAPTCHAS = ["", "turnstile", "hcaptcha", "recaptcha", "altcha"] as const;
+export const SENSITIVITY = { low: 70, medium: 50, high: 30 } as const;
+export const FIELD_TYPES = ["text", "email", "textarea", "number", "tel", "url", "date", "select", "checkbox", "file"] as const;
+export const OPS = ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty"] as const;
+
+export type Field = { type: (typeof FIELD_TYPES)[number]; name: string; label: string; required: boolean; placeholder: string; options: string[] };
+export type Condition = { field: string; op: (typeof OPS)[number]; value: string };
+export type Rule = {
+  name: string;
+  match: "all" | "any";
+  conditions: Condition[];
+  /** Empty strings mean "leave as is". `to` replaces the form's recipients for this submission. */
+  actions: { to: string; subject: string; webhook: string; spam: boolean; stop: boolean };
+};
+export type FormConfig = {
+  active: boolean;
+  allowLocalhost: boolean;
+  sensitivity: keyof typeof SENSITIVITY;
+  captcha: { provider: (typeof CAPTCHAS)[number]; siteKey: string; secret: string; minScore: number };
+  webhookAuth: { kind: "" | "bearer" | "basic" | "header"; header: string; value: string };
+  slack: string;
+  discord: string;
+  telegram: { token: string; chatId: string };
+  sheets: string;
+  notion: { token: string; database: string };
+  airtable: { token: string; base: string; table: string };
+  autoReply: { enabled: boolean; subject: string; body: string };
+  rules: Rule[];
+  builder: { enabled: boolean; title: string; description: string; submit: string; success: string; fields: Field[] };
+};
+
+export const defaults = (): FormConfig => ({
+  active: true,
+  allowLocalhost: true,
+  sensitivity: "medium",
+  captcha: { provider: "", siteKey: "", secret: "", minScore: 0.5 },
+  webhookAuth: { kind: "", header: "", value: "" },
+  slack: "",
+  discord: "",
+  telegram: { token: "", chatId: "" },
+  sheets: "",
+  notion: { token: "", database: "" },
+  airtable: { token: "", base: "", table: "" },
+  autoReply: { enabled: false, subject: "We got your message", body: "Hi {{name}},\n\nThanks for writing to us. We will get back to you soon." },
+  rules: [],
+  builder: { enabled: false, title: "", description: "", submit: "Send", success: "Thanks, your message was sent.", fields: [] },
+});
+
+/** Stored JSON (maybe from an older version) on top of the defaults, one level deep. */
+export const withDefaults = (stored: any): FormConfig => {
+  const d: any = defaults();
+  for (const [k, v] of Object.entries(stored ?? {})) if (k in d) d[k] = d[k] && typeof d[k] === "object" && !Array.isArray(d[k]) ? { ...d[k], ...(v as object) } : v;
+  return d;
+};
+
+// ---- Validation of what the admin saves ----
+
+const str = (v: unknown, max = 500) => String(v ?? "").trim().slice(0, max);
+const bool = (v: unknown) => v === true || v === "on" || v === "true" || v === "1";
+const oneOf = <T extends readonly string[]>(v: unknown, allowed: T, label: string): T[number] => {
+  if (!allowed.includes(String(v ?? ""))) throw new HttpError(`Pick a valid ${label}.`, 400);
+  return String(v ?? "") as T[number];
+};
+export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const httpsUrl = (v: unknown, label: string, host?: RegExp) => {
+  const s = str(v, 2000);
+  if (!s) return "";
+  let url: URL;
+  try {
+    url = new URL(s);
+  } catch {
+    throw new HttpError(`${label} must be a full https:// address.`, 400);
+  }
+  if (!/^https?:$/.test(url.protocol)) throw new HttpError(`${label} must be a full https:// address.`, 400);
+  if (host && !host.test(url.hostname)) throw new HttpError(`${label} does not look right (check the address you copied).`, 400);
+  return url.href;
+};
+const emails = (v: unknown, label: string) => {
+  const list = str(v, 2000).split(/[\s,]+/).filter(Boolean);
+  const bad = list.find((e) => !EMAIL.test(e));
+  if (bad) throw new HttpError(`${label}: not an email address: ${bad}`, 400);
+  return list.join(", ");
+};
+const NAME = /^[\w.\-\[\]]{1,100}$/;
+
+const field = (f: any): Field => {
+  const name = str(f?.name, 100);
+  if (!NAME.test(name) || name.startsWith("_")) throw new HttpError(`Field name "${name}" may use letters, digits, - and _ (not starting with _).`, 400);
+  return {
+    type: oneOf(f?.type, FIELD_TYPES, "field type"),
+    name,
+    label: str(f?.label, 200) || name,
+    required: bool(f?.required),
+    placeholder: str(f?.placeholder, 200),
+    options: (Array.isArray(f?.options) ? f.options : String(f?.options ?? "").split("\n")).map((o: unknown) => str(o, 200)).filter(Boolean).slice(0, 100),
+  };
+};
+
+const rule = (r: any, i: number): Rule => {
+  const conditions = (Array.isArray(r?.conditions) ? r.conditions : []).slice(0, 10).map((c: any) => ({ field: str(c?.field, 100), op: oneOf(c?.op, OPS, "condition"), value: str(c?.value, 500) }));
+  if (!conditions.length || conditions.some((c: Condition) => !c.field)) throw new HttpError(`Rule ${i + 1}: every condition needs a field.`, 400);
+  const a = r?.actions ?? {};
+  const actions = { to: emails(a.to, `Rule ${i + 1}`), subject: str(a.subject, 200), webhook: httpsUrl(a.webhook, `Rule ${i + 1} webhook`), spam: bool(a.spam), stop: bool(a.stop) };
+  if (!actions.to && !actions.subject && !actions.webhook && !actions.spam && !actions.stop) throw new HttpError(`Rule ${i + 1} does nothing: give it an action.`, 400);
+  return { name: str(r?.name, 100) || `Rule ${i + 1}`, match: r?.match === "any" ? "any" : "all", conditions, actions };
+};
+
+/** Each section the admin may save, checked and cleaned. Unknown keys are refused. */
+const sections: { [K in keyof FormConfig]: (v: any) => FormConfig[K] } = {
+  active: bool,
+  allowLocalhost: bool,
+  sensitivity: (v) => oneOf(v, Object.keys(SENSITIVITY) as (keyof typeof SENSITIVITY)[], "spam sensitivity"),
+  captcha: (v) => {
+    const provider = oneOf(v?.provider, CAPTCHAS, "CAPTCHA");
+    const c = { provider, siteKey: str(v?.siteKey, 200), secret: str(v?.secret, 300), minScore: Math.min(1, Math.max(0, Number(v?.minScore ?? 0.5) || 0)) };
+    if (provider && provider !== "altcha" && (!c.siteKey || !c.secret)) throw new HttpError("The CAPTCHA needs its site key and secret key.", 400);
+    return c;
+  },
+  webhookAuth: (v) => {
+    const kind = oneOf(v?.kind, ["", "bearer", "basic", "header"] as const, "webhook authentication");
+    const header = str(v?.header, 100);
+    if (kind === "header" && !/^[A-Za-z0-9-]+$/.test(header)) throw new HttpError("Give the custom header a name like X-Api-Key.", 400);
+    if (kind && !str(v?.value, 1000)) throw new HttpError("The webhook authentication needs a value.", 400);
+    return { kind, header, value: str(v?.value, 1000) };
+  },
+  slack: (v) => httpsUrl(v, "The Slack webhook", /^hooks\.slack\.com$/),
+  discord: (v) => httpsUrl(v, "The Discord webhook", /^(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)$/),
+  telegram: (v) => {
+    const t = { token: str(v?.token, 200), chatId: str(v?.chatId, 100) };
+    if (t.token && !/^\d+:[\w-]+$/.test(t.token)) throw new HttpError("The Telegram bot token looks like 123456:ABC-…", 400);
+    if (!!t.token !== !!t.chatId) throw new HttpError("Telegram needs both the bot token and the chat ID.", 400);
+    return t;
+  },
+  sheets: (v) => httpsUrl(v, "The Google Sheets script address", /^script\.google\.com$/),
+  notion: (v) => {
+    const n = { token: str(v?.token, 300), database: str(v?.database, 200).replace(/^.*\/([0-9a-f]{32}).*$/i, "$1") };
+    if (!!n.token !== !!n.database) throw new HttpError("Notion needs both the integration token and the database.", 400);
+    return n;
+  },
+  airtable: (v) => {
+    const a = { token: str(v?.token, 300), base: str(v?.base, 100), table: str(v?.table, 200) };
+    if ((a.token || a.base || a.table) && !(a.token && /^app\w+$/.test(a.base) && a.table)) throw new HttpError("Airtable needs the token, the base ID (app…) and the table name.", 400);
+    return a;
+  },
+  autoReply: (v) => ({ enabled: bool(v?.enabled), subject: str(v?.subject, 200) || "We got your message", body: str(v?.body, 5000) }),
+  rules: (v) => (Array.isArray(v) ? v : []).slice(0, 25).map(rule),
+  builder: (v) => {
+    const fields = (Array.isArray(v?.fields) ? v.fields : []).slice(0, 50).map(field);
+    const dup = fields.find((f: Field, i: number) => fields.findIndex((g: Field) => g.name === f.name) !== i);
+    if (dup) throw new HttpError(`Two fields are named "${dup.name}".`, 400);
+    if (bool(v?.enabled) && !fields.length) throw new HttpError("Add at least one field before turning the form on.", 400);
+    return { enabled: bool(v?.enabled), title: str(v?.title, 200), description: str(v?.description, 1000), submit: str(v?.submit, 50) || "Send", success: str(v?.success, 500) || "Thanks, your message was sent.", fields };
+  },
+};
+
+/** Secret field, and the field that says the section is still in use. */
+const KEEP: Record<string, [string, string]> = { captcha: ["secret", "provider"], webhookAuth: ["value", "kind"], telegram: ["token", "chatId"], notion: ["token", "database"], airtable: ["token", "base"] };
+
+/** The config as the admin page may see it: secrets blanked, with a flag saying whether one is saved. */
+export const forAdmin = (c: FormConfig) => {
+  const out: any = structuredClone(c);
+  const saved: Record<string, boolean> = {};
+  for (const [k, [secret]] of Object.entries(KEEP)) {
+    saved[k] = !!out[k][secret];
+    out[k][secret] = "";
+  }
+  return { config: out as FormConfig, saved };
+};
+
+/** The current config with the admin's changes applied; throws a readable HttpError on bad input. */
+export const patchConfig = (current: FormConfig, patch: Record<string, unknown>): FormConfig => {
+  const next: any = { ...current };
+  for (const [k, raw] of Object.entries(patch)) {
+    if (!(k in sections)) throw new HttpError(`Unknown setting: ${k}`, 400);
+    let v: any = raw;
+    // The admin page never shows saved secrets: an empty secret next to a still-set section means "keep it".
+    const keep = KEEP[k];
+    if (keep && v && typeof v === "object" && !str(v[keep[0]]) && str(v[keep[1]])) v = { ...v, [keep[0]]: (current as any)[k][keep[0]] };
+    next[k] = (sections as any)[k](v);
+  }
+  return next;
+};

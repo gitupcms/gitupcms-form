@@ -12,32 +12,19 @@ const hint = "text-muted-foreground text-xs";
 ---
 
 <div class="flex flex-col gap-6">
-  <form class="flex flex-col gap-4 rounded-lg border p-4" data-settings>
+  <form class="flex flex-col gap-4 rounded-lg border p-4" data-save="reload">
+    <label class="flex items-start gap-3 text-sm">
+      <input type="checkbox" class="mt-1 size-4" name="config.active" checked={form.config.active} />
+      <span class="flex flex-col gap-1">
+        Accept submissions
+        <span class={hint}>Turn off to pause the form: posts get "not accepting submissions" and nothing is stored.</span>
+      </span>
+    </label>
     <label class={label}>Name <input class={inputClass} name="name" value={form.name} required maxlength="100" /></label>
-    <label class={label}>
-      Email new submissions to
-      <input class={inputClass} name="recipients" value={form.recipients} placeholder="you@example.com, team@example.com" />
-      <span class={hint}>Comma-separated. Replies go to the sender. Leave empty for no email.</span>
-    </label>
-    <label class={label}>
-      Allowed sites
-      <input class={inputClass} name="domains" value={form.domains} placeholder="example.com" />
-      <span class={hint}>Only forms on these domains (and their subdomains) may post. Empty: any site. Scripts without a browser are refused once this is set.</span>
-    </label>
     <label class={label}>
       After sending, go to
       <input class={inputClass} name="redirect" value={form.redirect} placeholder="https://example.com/thanks" />
       <span class={hint}>Empty: the form's <code>_redirect</code> field on the same site, else a plain thank-you page.</span>
-    </label>
-    <label class={label}>
-      Webhook
-      <input class={inputClass} name="webhookUrl" value={form.webhookUrl} placeholder="https://hooks.example.com/forms" />
-      <span class={hint}>Gets each submission as JSON (not spam), signed with the secret below; a failed post is tried once more.</span>
-    </label>
-    <label class={label}>
-      Blocklist
-      <textarea class={inputClass + " min-h-24 py-2"} name="blocklist" placeholder={"casino\nspammer@example.com\n203.0.113.7"}>{form.blocklist}</textarea>
-      <span class={hint}>One per line: a word or phrase, an email address or an IP. A match sends the submission to Spam.</span>
     </label>
     <label class={label}>
       Keep submissions
@@ -52,19 +39,6 @@ const hint = "text-muted-foreground text-xs";
     </div>
   </form>
 
-  <section class="flex flex-col gap-3 rounded-lg border p-4">
-    <h2 class={sectionLabel}>Webhook signing secret</h2>
-    <p class={hint}>
-      The <code>X-Gitupcms-Signature</code> header is <code>t=&lt;unix time&gt;,v1=&lt;hex HMAC-SHA256 of "t.body"&gt;</code>. Recompute it with this secret and
-      refuse old timestamps.
-    </p>
-    <div class="flex items-center gap-2">
-      <input class={inputClass + " font-mono"} type="password" value={form.webhookSecret} readonly aria-label="Webhook secret" data-secret />
-      <button class={button("outline", "sm")} data-reveal>Show</button>
-      <button class={button("outline", "sm")} data-rotate>New secret</button>
-    </div>
-  </section>
-
   <section class="border-destructive/40 flex flex-col gap-3 rounded-lg border p-4">
     <h2 class={sectionLabel}>Delete form</h2>
     <p class={hint}>Deletes the form, every submission and every uploaded file. Posts to its address stop working.</p>
@@ -76,43 +50,13 @@ const hint = "text-muted-foreground text-xs";
 </div>
 
 <script define:vars={{ key: form.key }}>
-  const call = async (body) => {
-    const res = await fetch(`/api/forms/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const json = await res.json().catch(() => ({ error: "Unexpected response." }));
-    if (!res.ok) throw new Error(json.error);
-    return json.data;
-  };
-  const form = document.querySelector("[data-settings]");
-  const status = document.querySelector("[data-status]");
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      await call({ action: "settings", ...Object.fromEntries(new FormData(form)) });
-      status.className = "text-sm text-muted-foreground";
-      status.textContent = "Saved.";
-    } catch (err) {
-      status.className = "text-sm text-destructive";
-      status.textContent = err.message;
-    }
-  });
-  const secret = document.querySelector("[data-secret]");
-  document.querySelector("[data-reveal]").addEventListener("click", (e) => {
-    secret.type = secret.type === "password" ? "text" : "password";
-    e.target.textContent = secret.type === "password" ? "Show" : "Hide";
-  });
-  document.querySelector("[data-rotate]").addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    await call({ action: "rotate-secret" }).catch((err) => (status.textContent = err.message));
-    location.reload();
-  });
+  const confirmInput = document.querySelector("[data-confirm]");
   document.querySelector("[data-delete]").addEventListener("click", async () => {
-    try {
-      await call({ action: "delete-form", confirm: document.querySelector("[data-confirm]").value });
-      location.href = "/";
-    } catch (err) {
-      document.querySelector("[data-confirm]").setCustomValidity(err.message);
-      document.querySelector("[data-confirm]").reportValidity();
-      document.querySelector("[data-confirm]").setCustomValidity("");
-    }
+    const res = await fetch(`/api/forms/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete-form", confirm: confirmInput.value }) });
+    if (res.ok) return (location.href = "/");
+    const json = await res.json().catch(() => ({ error: "Unexpected response." }));
+    confirmInput.setCustomValidity(json.error);
+    confirmInput.reportValidity();
+    confirmInput.setCustomValidity("");
   });
 </script>

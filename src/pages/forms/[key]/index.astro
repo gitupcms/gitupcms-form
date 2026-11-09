@@ -3,20 +3,34 @@ import Admin from "@/layouts/Admin.astro";
 import FormHeader from "@/components/FormHeader.astro";
 import Inbox from "@/components/Inbox.astro";
 import Setup from "@/components/Setup.astro";
+import Builder from "@/components/Builder.astro";
+import Delivery from "@/components/Delivery.astro";
+import Rules from "@/components/Rules.astro";
+import Security from "@/components/Security.astro";
 import Settings from "@/components/Settings.astro";
 import { formByKey } from "@/plugins/forms/lib/forms";
 
 const form = formByKey(Astro.params.key ?? "");
 if (!form) return Astro.redirect("/");
-const asked = Astro.url.searchParams.get("tab");
-const tab = asked === "spam" || asked === "setup" || asked === "settings" ? asked : "inbox";
+const TABS = ["inbox", "spam", "setup", "builder", "delivery", "rules", "security", "settings"] as const;
+const asked = Astro.url.searchParams.get("tab") as (typeof TABS)[number];
+const tab = TABS.includes(asked) ? asked : "inbox";
 ---
 
 <Admin title={form.name}>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6" data-key={form.key}>
     <FormHeader form={form} tab={tab} />
     {(tab === "inbox" || tab === "spam") && <Inbox form={form} status={tab} />}
     {tab === "setup" && <Setup form={form} />}
+    {tab === "builder" && <Builder form={form} />}
+    {tab === "delivery" && <Delivery form={form} />}
+    {tab === "rules" && <Rules form={form} />}
+    {tab === "security" && <Security form={form} />}
     {tab === "settings" && <Settings form={form} />}
   </div>
 </Admin>
+
+<script>
+  import { wireSaveForms } from "@/lib/save";
+  wireSaveForms(document.querySelector<HTMLElement>("[data-key]")!.dataset.key!);
+</script>

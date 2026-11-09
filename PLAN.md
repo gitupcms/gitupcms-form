@@ -54,7 +54,7 @@ dashboard'u (koyu, tablo + Spam rozeti) inbox için iyi bir referans.
 | Business/müşteri inbox | lead mgmt | – | ✓ | sonra |
 | AI prompt generator | – | – | ✓ | ✓ (kurulum ekranında kopyala) |
 | MCP / AI Reply | ✓ | – | – | yok (şimdilik) |
-| Görsel form builder | ✓ | – | – | yok: form sitede kalır |
+| Görsel form builder | ✓ | – | – | ✓ (basit: alanlar + embed) |
 | Self-host / açık kaynak | – | – | – | **✓** |
 
 ---
@@ -82,10 +82,18 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 
 ## 4. Sonraki sürümler
 
-- Turnstile, auto-responder, S3'e dosya yükleme.
-- Hazır Slack/Discord bildirimi (webhook üstüne küçük formatlayıcı).
-- Basit kurallar: "alan = değer → şu alıcıya gönder", kaydetmeden önce örnek gönderimle deneme.
-- REST API (`X-API-Key`): formlar ve gönderimler; gerekirse MCP.
+- S3'e dosya yükleme.
+
+## 4a. Static Forms özellikleri — yapıldı
+
+- CAPTCHA: Turnstile, hCaptcha, reCAPTCHA v2/v3 (skor eşiği), Altcha (sunucunun kendisi, üçüncü taraf yok).
+- Spam hassasiyeti (düşük/orta/yüksek), formu duraklatma, localhost istisnası.
+- Auto-reply (adres başına günde bir; alan değerleri kısaltılır, linkler silinir).
+- Slack, Discord, Telegram, Google Sheets (Apps Script), Notion, Airtable.
+- Kurallar (koşul → alıcı/konu/ek webhook/spam/dur) ve kaydetmeden dry-run.
+- Webhook kimlik doğrulama: Bearer, Basic, özel başlık (imza ile birlikte).
+- Ortak gelen kutusu (`/inbox`), REST API (`/api/v1`, Bearer `gf_…` anahtar) ve MCP (`/mcp`).
+- Görsel form builder: alanlar, embed script, barındırılan sayfa `/f/<key>`, sunucuda alan kontrolü.
 
 ## 4b. Gizlilik (GDPR / KVKK), hem self-host hem cloud — yapıldı
 
@@ -98,7 +106,7 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 
 ## 5. Yapmayacaklarımız
 
-- Görsel form builder ve embed script: form sitede kalır, ürün backend'dir (HeyForm/OpnForm başka iş).
+- Koşullu alanlar, çok sayfalı formlar, ödeme alanı (HeyForm/OpnForm işi).
 - AI Reply, lead pipeline. (Cloud için faturalandırma ve AB veri bölgesi cloud işinde ele alınacak.)
 
 ## 6. WuppyCMS ile ilişki

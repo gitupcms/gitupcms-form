@@ -17,7 +17,7 @@ export const blocklistLines = (text: string) =>
     .map((l) => l.trim().toLowerCase())
     .filter(Boolean);
 
-export const spamCheck = (input: { data: Fields; honeypot: string; email: string; ip: string; recentFromIp: number; duplicate: boolean; blocklist: string }) => {
+export const spamCheck = (input: { data: Fields; honeypot: string; email: string; ip: string; recentFromIp: number; duplicate: boolean; blocklist: string; threshold?: number }) => {
   const signals: Signal[] = [];
   const add = (points: number, reason: string) => signals.push({ points, reason });
   const all = values(input.data);
@@ -36,5 +36,5 @@ export const spamCheck = (input: { data: Fields; honeypot: string; email: string
   if (input.email && !EMAIL.test(input.email)) add(30, "The email field is not an email address");
 
   const score = signals.reduce((s, x) => s + x.points, 0);
-  return { score, signals, spam: score >= THRESHOLD };
+  return { score, signals, spam: score >= (input.threshold ?? THRESHOLD) };
 };

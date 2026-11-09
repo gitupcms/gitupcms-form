@@ -1,0 +1,77 @@
+---
+import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/island";
+import { SENSITIVITY } from "@/plugins/forms/lib/config";
+import type { Form } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+}
+const { form } = Astro.props;
+const c = form.config;
+const label = "flex flex-col gap-1 text-sm";
+const hint = "text-muted-foreground text-xs";
+const card = "flex flex-col gap-4 rounded-lg border p-4";
+const providers = [
+  ["", "None"],
+  ["altcha", "Altcha (runs on this server, no third party)"],
+  ["turnstile", "Cloudflare Turnstile"],
+  ["hcaptcha", "hCaptcha"],
+  ["recaptcha", "Google reCAPTCHA v2 or v3"],
+];
+---
+
+<div class="flex flex-col gap-6">
+  <form class={card} data-save>
+    <h2 class="text-sm font-medium">Allowed sites</h2>
+    <label class={label}>
+      Domains
+      <input class={inputClass} name="domains" value={form.domains} placeholder="example.com, shop.example.com" />
+      <span class={hint}>Only forms on these domains (and their subdomains) may post. Empty: any site. Scripts without a browser are refused once this is set.</span>
+    </label>
+    <label class="flex items-start gap-3 text-sm">
+      <input type="checkbox" class="mt-1 size-4" name="config.allowLocalhost" checked={c.allowLocalhost} />
+      <span class="flex flex-col gap-1">Also allow localhost <span class={hint}>So you can test the form while building the site.</span></span>
+    </label>
+    <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
+  </form>
+
+  <form class={card} data-save>
+    <h2 class="text-sm font-medium">CAPTCHA</h2>
+    <p class={hint}>
+      Posts without a solved CAPTCHA are refused. The honeypot and spam filter work without one; add it when bots get through. After saving, the Setup tab shows
+      what to add to your form.
+    </p>
+    <label class={label}>
+      Provider
+      <select class={inputClass} name="config.captcha.provider">
+        {providers.map(([v, l]) => <option value={v} selected={c.captcha.provider === v}>{l}</option>)}
+      </select>
+    </label>
+    <label class={label}>Site key <input class={inputClass} name="config.captcha.siteKey" value={c.captcha.siteKey} placeholder="Not needed for Altcha" /></label>
+    <label class={label}>Secret key <input class={inputClass} type="password" name="config.captcha.secret" placeholder={c.captcha.secret ? "Saved (leave empty to keep it)" : "Not needed for Altcha"} autocomplete="off" /></label>
+    <label class={label}>
+      Lowest reCAPTCHA v3 score
+      <input class={inputClass} type="number" min="0" max="1" step="0.1" name="config.captcha.minScore" value={c.captcha.minScore} />
+      <span class={hint}>Only for reCAPTCHA v3 (0 = bot, 1 = human). Put its token in a <code>g-recaptcha-response</code> field.</span>
+    </label>
+    <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
+  </form>
+
+  <form class={card} data-save>
+    <h2 class="text-sm font-medium">Spam filter</h2>
+    <label class={label}>
+      Sensitivity
+      <select class={inputClass} name="config.sensitivity">
+        {Object.entries(SENSITIVITY).map(([k, v]) => <option value={k} selected={c.sensitivity === k}>{k[0].toUpperCase() + k.slice(1)} (spam at score {v})</option>)}
+      </select>
+      <span class={hint}>High catches more spam but may flag real messages; check the Spam tab now and then.</span>
+    </label>
+    <label class={label}>
+      Blocklist
+      <textarea class={inputClass + " min-h-24 py-2"} name="blocklist" placeholder={"casino\nspammer@example.com\n203.0.113.7"}>{form.blocklist}</textarea>
+      <span class={hint}>One per line: a word or phrase, an email address or an IP. A match sends the submission to Spam.</span>
+    </label>
+    <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
+  </form>
+</div>

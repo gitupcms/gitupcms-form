@@ -12,7 +12,7 @@ const f = await import("./forms.ts");
 
 const form = f.formByKey(f.createForm("Contact", "owner@example.com"))!;
 const save = (data: Record<string, string>, files: File[] = []) =>
-  f.saveSubmission(form, { data, files: files.map((file) => ({ field: "cv", file })), options: { redirect: "", subject: "Hi", replyTo: data.email ?? "", honeypot: "" } }, { ip: "203.0.113.7", origin: "https://site.test", recentFromIp: 0 });
+  f.saveSubmission(form, { data, files: files.map((file) => ({ field: "cv", file })), options: { redirect: "", subject: "Hi", replyTo: data.email ?? "", honeypot: "", captcha: "" } }, { ip: "203.0.113.7", origin: "https://site.test", recentFromIp: 0 });
 const raw = () => readFileSync(process.env.DB_PATH!, "latin1") + readFileSync(`${process.env.DB_PATH}-wal`, "latin1");
 
 test("what visitors send is encrypted on disk; IPs are not stored", async () => {

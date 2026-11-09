@@ -4,6 +4,7 @@
  */
 import { HttpError } from "../../../lib/http.ts";
 import type { Fields } from "./spam";
+import { isCaptchaField } from "./captcha.ts";
 
 const env = (name: string) => process.env[name] ?? import.meta.env?.[name];
 /** Biggest request with files (MAX_UPLOAD_MB, default 10); posts without files may be 100 KB. */
@@ -15,7 +16,7 @@ const MAX_VALUE = 20_000;
 const MAX_FILES = 10;
 
 /** `_redirect`, `_subject`, `_replyto` and the `_gotcha` honeypot; other `_` names are dropped. */
-export type Options = { redirect: string; subject: string; replyTo: string; honeypot: string };
+export type Options = { redirect: string; subject: string; replyTo: string; honeypot: string; captcha: string };
 export type Upload = { field: string; file: File };
 export type Parsed = { data: Fields; files: Upload[]; options: Options };
 
@@ -46,7 +47,7 @@ export const parseSubmission = async (request: Request): Promise<Parsed> => {
 
   const data: Fields = {};
   const files: Upload[] = [];
-  const options: Options = { redirect: "", subject: "", replyTo: "", honeypot: "" };
+  const options: Options = { redirect: "", subject: "", replyTo: "", honeypot: "", captcha: "" };
   let count = 0;
   for (const [rawName, value] of entries) {
     const name = rawName.trim().slice(0, MAX_NAME);
@@ -64,6 +65,7 @@ export const parseSubmission = async (request: Request): Promise<Parsed> => {
     else if (name === "_subject") options.subject = value.trim().slice(0, 200);
     else if (name === "_replyto") options.replyTo = value.trim();
     else if (name === "_gotcha" || name === "_honeypot") options.honeypot = value;
+    else if (isCaptchaField(name)) options.captcha = value;
     else if (!name.startsWith("_")) add(data, name, value);
   }
   if (!options.replyTo && typeof data.email === "string") options.replyTo = data.email.trim();

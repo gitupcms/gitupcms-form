@@ -1,0 +1,139 @@
+---
+import { button, inputClass } from "@/components/ui/island";
+import { OPS } from "@/plugins/forms/lib/config";
+import type { Form } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+}
+const { form } = Astro.props;
+const hint = "text-muted-foreground text-xs";
+---
+
+<div class="flex flex-col gap-6">
+  <p class="text-muted-foreground text-sm">
+    Rules run on every submission, top to bottom. Each can send it to other addresses, change the email subject (<code>{"{{field}}"}</code> works), post it to one more
+    webhook, or mark it as spam. "Stop" skips the rules below it.
+  </p>
+  <div class="flex flex-col gap-4" data-rules></div>
+  <div class="flex flex-wrap items-center gap-3">
+    <button class={button("outline")} data-add>Add a rule</button>
+    <button class={button("primary")} data-save-rules>Save rules</button>
+    <span class="text-sm" role="status" data-status></span>
+  </div>
+
+  <section class="flex flex-col gap-3 rounded-lg border p-4">
+    <h2 class="text-sm font-medium">Try them</h2>
+    <p class={hint}>One field per line, like <code>topic=sales</code>. Uses the rules above as they are now (saved or not). Nothing is stored or sent.</p>
+    <textarea class={inputClass + " min-h-24 py-2 font-mono"} data-sample>{"name=Ada\nemail=ada@example.com\ntopic=sales\nmessage=Hello"}</textarea>
+    <div><button class={button("outline")} data-try>Run a dry run</button></div>
+    <pre class="bg-muted hidden overflow-x-auto rounded-lg p-3 text-xs whitespace-pre-wrap" data-result></pre>
+  </section>
+</div>
+
+<template data-rule>
+  <fieldset class="flex flex-col gap-3 rounded-lg border p-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <input class={inputClass + " max-w-xs"} data-k="name" placeholder="Rule name" aria-label="Rule name" />
+      <select class={inputClass + " w-auto!"} data-k="match" aria-label="Match">
+        <option value="all">when all conditions match</option>
+        <option value="any">when any condition matches</option>
+      </select>
+      <span class="flex-1"></span>
+      <button type="button" class={button("ghost", "sm")} data-move="-1" aria-label="Move up">↑</button>
+      <button type="button" class={button("ghost", "sm")} data-move="1" aria-label="Move down">↓</button>
+      <button type="button" class={button("ghost", "sm")} data-remove>Remove</button>
+    </div>
+    <div class="flex flex-col gap-2" data-conditions></div>
+    <div><button type="button" class={button("outline", "sm")} data-add-condition>Add a condition</button></div>
+    <div class="grid gap-2 sm:grid-cols-3">
+      <input class={inputClass} data-k="to" placeholder="Send to (emails)" aria-label="Send to" />
+      <input class={inputClass} data-k="subject" placeholder="Email subject" aria-label="Email subject" />
+      <input class={inputClass} data-k="webhook" placeholder="Also post to webhook" aria-label="Webhook" />
+    </div>
+    <div class="flex gap-4 text-sm">
+      <label class="flex items-center gap-2"><input type="checkbox" class="size-4" data-k="spam" /> Mark as spam</label>
+      <label class="flex items-center gap-2"><input type="checkbox" class="size-4" data-k="stop" /> Stop here</label>
+    </div>
+  </fieldset>
+</template>
+
+<template data-condition>
+  <div class="flex flex-wrap gap-2">
+    <input class={inputClass + " max-w-48"} data-c="field" placeholder="Field" aria-label="Field" />
+    <select class={inputClass + " w-auto!"} data-c="op" aria-label="Condition">{OPS.map((o) => <option value={o}>{o.replace("_", " ")}</option>)}</select>
+    <input class={inputClass + " max-w-64"} data-c="value" placeholder="Value" aria-label="Value" />
+    <button type="button" class={button("ghost", "sm")} data-remove-condition aria-label="Remove condition">×</button>
+  </div>
+</template>
+
+<script define:vars={{ key: form.key, saved: form.config.rules }}>
+  const list = document.querySelector("[data-rules]");
+  const ruleTpl = document.querySelector("template[data-rule]");
+  const condTpl = document.querySelector("template[data-condition]");
+  const status = document.querySelector("[data-status]");
+  const call = async (body) => {
+    const res = await fetch(`/api/forms/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = await res.json().catch(() => ({ error: "Unexpected response." }));
+    if (!res.ok) throw new Error(json.error);
+    return json.data;
+  };
+
+  const addCondition = (box, c = { field: "", op: "equals", value: "" }) => {
+    const row = condTpl.content.firstElementChild.cloneNode(true);
+    for (const el of row.querySelectorAll("[data-c]")) el.value = c[el.dataset.c];
+    row.querySelector("[data-remove-condition]").onclick = () => row.remove();
+    box.append(row);
+  };
+  const addRule = (r = { name: "", match: "all", conditions: [{ field: "", op: "equals", value: "" }], actions: { to: "", subject: "", webhook: "", spam: false, stop: false } }) => {
+    const el = ruleTpl.content.firstElementChild.cloneNode(true);
+    const values = { name: r.name, match: r.match, ...r.actions };
+    for (const input of el.querySelectorAll("[data-k]")) input.type === "checkbox" ? (input.checked = values[input.dataset.k]) : (input.value = values[input.dataset.k]);
+    const box = el.querySelector("[data-conditions]");
+    r.conditions.forEach((c) => addCondition(box, c));
+    el.querySelector("[data-add-condition]").onclick = () => addCondition(box);
+    el.querySelector("[data-remove]").onclick = () => el.remove();
+    el.querySelectorAll("[data-move]").forEach((b) => (b.onclick = () => (b.dataset.move === "-1" ? el.previousElementSibling?.before(el) : el.nextElementSibling?.after(el))));
+    list.append(el);
+  };
+  const read = () =>
+    [...list.children].map((el) => {
+      const v = (k) => el.querySelector(`[data-k="${k}"]`);
+      return {
+        name: v("name").value,
+        match: v("match").value,
+        conditions: [...el.querySelectorAll("[data-conditions] > div")].map((row) => Object.fromEntries([...row.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, i.value]))),
+        actions: { to: v("to").value, subject: v("subject").value, webhook: v("webhook").value, spam: v("spam").checked, stop: v("stop").checked },
+      };
+    });
+
+  saved.forEach(addRule);
+  document.querySelector("[data-add]").onclick = () => addRule();
+  document.querySelector("[data-save-rules]").onclick = async () => {
+    try {
+      await call({ action: "update", config: { rules: read() } });
+      Object.assign(status, { className: "text-muted-foreground text-sm", textContent: "Saved." });
+    } catch (err) {
+      Object.assign(status, { className: "text-destructive text-sm", textContent: err.message });
+    }
+  };
+  const result = document.querySelector("[data-result]");
+  document.querySelector("[data-try]").onclick = async () => {
+    const data = Object.fromEntries(
+      document.querySelector("[data-sample]").value.split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
+    );
+    result.classList.remove("hidden");
+    try {
+      const out = await call({ action: "test-rules", rules: read(), data });
+      result.textContent = [
+        `Matched: ${out.matched.length ? out.matched.join(", ") : "no rule"}`,
+        `Email to: ${out.to.join(", ") || "nobody"}${out.defaultRecipients ? " (the form's recipients)" : ""}`,
+        `Subject: ${out.subject || "(default)"}`,
+        `Extra webhooks: ${out.webhooks.join(", ") || "none"}`,
+        `Spam: ${out.spam ? "yes" : "no"}`,
+      ].join("\n");
+    } catch (err) {
+      result.textContent = err.message;
+    }
+  };
+</script>

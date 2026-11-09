@@ -94,7 +94,7 @@ Each submission that is not spam is POSTed as JSON to the form's webhook, retrie
   "submission": { "id": "…", "createdAt": "…", "data": { … }, "files": [ … ], "url": "…" } }
 ```
 
-The `X-Gitupcms-Signature` header is `t=<unix time>,v1=<hex>`. Verify it with the secret from Settings:
+The `X-Gitupcms-Signature` header is `t=<unix time>,v1=<hex>`. Verify it with the secret from the Delivery tab. The webhook can also send a Bearer token, Basic auth or a custom header.
 
 ```js
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -102,6 +102,21 @@ const [, t, v1] = /t=(\d+),v1=([0-9a-f]+)/.exec(header);
 const ok = Math.abs(Date.now() / 1000 - t) < 300 &&
   timingSafeEqual(Buffer.from(v1), Buffer.from(createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex")));
 ```
+
+## Per form
+
+- **Builder**: make the form here; embed it with two lines or share its own page `/f/<key>`.
+- **Delivery**: email recipients, auto-reply, webhook, Slack, Discord, Telegram, Google Sheets, Notion, Airtable.
+- **Rules**: "when topic is sales, email sales@… with subject Lead: {{name}}", with a dry run.
+- **Security**: allowed domains (with a localhost exception), CAPTCHA (Turnstile, hCaptcha, reCAPTCHA, Altcha), spam sensitivity, blocklist.
+- **Settings**: pause the form, redirect, how long to keep submissions.
+
+## API and MCP
+
+Create a key under **API**. REST: `GET /api/v1/forms`, `GET /api/v1/forms/<key>/submissions?status=&q=&page=`,
+`GET|PATCH|DELETE /api/v1/submissions/<id>`, `POST /api/v1/forms/<key>/rules/test`, all with `Authorization: Bearer gf_…`.
+MCP (Streamable HTTP, JSON replies) at `/mcp` with the same header; tools: list_forms, get_form, list_submissions,
+get_submission, set_submission_status, delete_submission, test_rules.
 
 ## Code
 
