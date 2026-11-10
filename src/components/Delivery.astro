@@ -129,7 +129,8 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     </div>
     <p class={hint}>
       Mailchimp: the sender's email joins the audience as pending; Mailchimp asks them to confirm. Put a newsletter checkbox in the form and its name above, so only people who
-      tick it are asked. API key: Profile → Extras → API keys. Audience ID: Audience → Settings → Audience name and defaults.
+      tick it are asked. API key: Profile → Extras → API keys. Audience ID: Audience → Settings → Audience name and defaults. Send from your own domain (Account → Domains,
+      verify and authenticate it); with a Gmail or other free address, the confirmation emails often land in spam.
     </p>
     <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
   </form>
