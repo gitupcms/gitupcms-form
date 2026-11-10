@@ -1,5 +1,6 @@
 ---
 import { button, inputClass } from "@/components/ui/island";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OPS } from "@/plugins/forms/lib/config";
 import type { Form } from "@/plugins/forms/lib/forms";
 
@@ -35,10 +36,10 @@ const hint = "text-muted-foreground text-xs";
   <fieldset class="flex flex-col gap-3 rounded-lg border p-4">
     <div class="flex flex-wrap items-center gap-2">
       <input class={inputClass + " max-w-xs"} data-k="name" placeholder="Rule name" aria-label="Rule name" />
-      <select class={inputClass + " w-auto!"} data-k="match" aria-label="Match">
-        <option value="all">when all conditions match</option>
-        <option value="any">when any condition matches</option>
-      </select>
+      <Select defaultValue="all" data-k="match">
+        <SelectTrigger aria-label="Match"><SelectValue /></SelectTrigger>
+        <SelectContent><SelectItem value="all">when all conditions match</SelectItem><SelectItem value="any">when any condition matches</SelectItem></SelectContent>
+      </Select>
       <span class="flex-1"></span>
       <button type="button" class={button("ghost", "sm")} data-move="-1" aria-label="Move up">↑</button>
       <button type="button" class={button("ghost", "sm")} data-move="1" aria-label="Move down">↓</button>
@@ -61,13 +62,32 @@ const hint = "text-muted-foreground text-xs";
 <template data-condition>
   <div class="flex flex-wrap gap-2">
     <input class={inputClass + " max-w-48"} data-c="field" placeholder="Field" aria-label="Field" />
-    <select class={inputClass + " w-auto!"} data-c="op" aria-label="Condition">{OPS.map((o) => <option value={o}>{o.replace("_", " ")}</option>)}</select>
+    <Select defaultValue="equals" data-c="op">
+      <SelectTrigger aria-label="Condition"><SelectValue /></SelectTrigger>
+      <SelectContent>{OPS.map((o) => <SelectItem value={o}>{o.replace("_", " ")}</SelectItem>)}</SelectContent>
+    </Select>
     <input class={inputClass + " max-w-64"} data-c="value" placeholder="Value" aria-label="Value" />
     <button type="button" class={button("ghost", "sm")} data-remove-condition aria-label="Remove condition">×</button>
   </div>
 </template>
 
+<script>
+  // Rules are cloned from <template>s, so their Selects are bound here rather than by Select's own page-load script.
+  import { createSelect } from "@/lib/select";
+  (window as any).gfCreateSelect = createSelect;
+</script>
+
 <script define:vars={{ key: form.key, saved: form.config.rules }}>
+addEventListener("DOMContentLoaded", () => {
+  const selects = new WeakMap();
+  const val = (node) => (selects.has(node) ? selects.get(node).value : node.value);
+  const bindSelects = (scope, values) =>
+    scope.querySelectorAll('[data-slot="select"]').forEach((root) => {
+      const c = window.gfCreateSelect(root);
+      selects.set(root, c);
+      const v = values[root.dataset.k ?? root.dataset.c];
+      if (v) c.select(v);
+    });
   const list = document.querySelector("[data-rules]");
   const ruleTpl = document.querySelector("template[data-rule]");
   const condTpl = document.querySelector("template[data-condition]");
@@ -81,28 +101,30 @@ const hint = "text-muted-foreground text-xs";
 
   const addCondition = (box, c = { field: "", op: "equals", value: "" }) => {
     const row = condTpl.content.firstElementChild.cloneNode(true);
-    for (const el of row.querySelectorAll("[data-c]")) el.value = c[el.dataset.c];
+    for (const el of row.querySelectorAll("input[data-c]")) el.value = c[el.dataset.c];
     row.querySelector("[data-remove-condition]").onclick = () => row.remove();
     box.append(row);
+    bindSelects(row, c);
   };
   const addRule = (r = { name: "", match: "all", conditions: [{ field: "", op: "equals", value: "" }], actions: { to: "", subject: "", webhook: "", spam: false, stop: false } }) => {
     const el = ruleTpl.content.firstElementChild.cloneNode(true);
     const values = { name: r.name, match: r.match, ...r.actions };
-    for (const input of el.querySelectorAll("[data-k]")) input.type === "checkbox" ? (input.checked = values[input.dataset.k]) : (input.value = values[input.dataset.k]);
+    for (const input of el.querySelectorAll("input[data-k]")) input.type === "checkbox" ? (input.checked = values[input.dataset.k]) : (input.value = values[input.dataset.k]);
     const box = el.querySelector("[data-conditions]");
+    list.append(el);
+    bindSelects(el.querySelector(":scope > div"), values);
     r.conditions.forEach((c) => addCondition(box, c));
     el.querySelector("[data-add-condition]").onclick = () => addCondition(box);
     el.querySelector("[data-remove]").onclick = () => el.remove();
     el.querySelectorAll("[data-move]").forEach((b) => (b.onclick = () => (b.dataset.move === "-1" ? el.previousElementSibling?.before(el) : el.nextElementSibling?.after(el))));
-    list.append(el);
   };
   const read = () =>
     [...list.children].map((el) => {
       const v = (k) => el.querySelector(`[data-k="${k}"]`);
       return {
         name: v("name").value,
-        match: v("match").value,
-        conditions: [...el.querySelectorAll("[data-conditions] > div")].map((row) => Object.fromEntries([...row.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, i.value]))),
+        match: val(v("match")),
+        conditions: [...el.querySelectorAll("[data-conditions] > div")].map((row) => Object.fromEntries([...row.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, val(i)]))),
         actions: { to: v("to").value, subject: v("subject").value, webhook: v("webhook").value, spam: v("spam").checked, stop: v("stop").checked },
       };
     });
@@ -136,4 +158,5 @@ const hint = "text-muted-foreground text-xs";
       result.textContent = err.message;
     }
   };
+});
 </script>

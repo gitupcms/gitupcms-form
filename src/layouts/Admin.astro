@@ -2,6 +2,7 @@
 import Base from "./Base.astro";
 import { Button } from "@/components/ui/button";
 import { tabList, tabTrigger } from "@/components/ui/island";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FolderKanban, Gauge, Inbox, KeyRound, LayoutList, UserSearch, Users } from "@lucide/astro";
 import { workspaces } from "@/plugins/forms/lib/forms";
 
@@ -29,9 +30,10 @@ const active = (href: string) => (href === "/" ? path === "/" || path.startsWith
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
       <div class="flex items-center gap-3">
         <a href="/" class="flex items-center gap-2 font-medium"><Inbox class="size-4" /> Gitupcms Forms</a>
-        <select class="bg-background h-8 rounded-md border px-2 text-sm" aria-label="Workspace" data-workspace>
-          {all.map((w) => <option value={w.id} selected={w.id === workspace.id}>{w.name}</option>)}
-        </select>
+        <Select defaultValue={workspace.id} size="sm" data-workspace>
+          <SelectTrigger size="sm" aria-label="Workspace"><SelectValue /></SelectTrigger>
+          <SelectContent>{all.map((w) => <SelectItem value={w.id}>{w.name}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
       <div class="flex flex-wrap items-center gap-3 text-sm">
         <span class="text-muted-foreground hidden sm:inline">{admin.email}</span>
@@ -55,9 +57,8 @@ const active = (href: string) => (href === "/" ? path === "/" || path.startsWith
 
 <script>
   import { post } from "@/lib/post";
-  const select = document.querySelector<HTMLSelectElement>("[data-workspace]")!;
-  select.addEventListener("change", async () => {
-    await post("/api/workspaces", { action: "switch", id: select.value });
+  document.querySelector("[data-workspace]")!.addEventListener("select:change", async (e) => {
+    await post("/api/workspaces", { action: "switch", id: (e as CustomEvent<{ value: string }>).detail.value });
     location.href = "/";
   });
   document.querySelector("[data-sign-out]")?.addEventListener("click", async () => {

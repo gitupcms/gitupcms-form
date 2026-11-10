@@ -1,4 +1,5 @@
 ---
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { button, inputClass, sectionLabel } from "@/components/ui/island";
 import { SHEETS_SCRIPT } from "@/plugins/forms/lib/channels";
@@ -36,9 +37,10 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     </label>
     <label class={label}>
       Grouping
-      <select class={inputClass} name="config.email.digest" disabled={!c.archive}>
-        {[["", "One email per submission"], ["hourly", "One email an hour with everything new"], ["daily", "One email a day with everything new"]].map(([v, l]) => <option value={v} selected={c.email.digest === v}>{l}</option>)}
-      </select>
+<Select name="config.email.digest" defaultValue={c.email.digest} class="w-full" disabled={!c.archive}>
+        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>{[["", "One email per submission"], ["hourly", "One email an hour with everything new"], ["daily", "One email a day with everything new"]].map(([v, l]) => <SelectItem value={v}>{l}</SelectItem>)}</SelectContent>
+      </Select>
       <span class={hint}>{c.archive ? "Channels, webhooks and the auto-reply still go out at once. Send again from the inbox emails one right away." : "Needs stored submissions (Settings)."}</span>
     </label>
     <label class={label}>Auto-reply subject <input class={inputClass} name="config.autoReply.subject" value={c.autoReply.subject} maxlength="200" /></label>
@@ -64,9 +66,10 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     </label>
     <label class={label}>
       Authentication
-      <select class={inputClass} name="config.webhookAuth.kind">
-        {[["", "None (signature only)"], ["bearer", "Bearer token"], ["basic", "Basic (user:password)"], ["header", "Custom header"]].map(([v, l]) => <option value={v} selected={c.webhookAuth.kind === v}>{l}</option>)}
-      </select>
+<Select name="config.webhookAuth.kind" defaultValue={c.webhookAuth.kind} class="w-full">
+        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>{[["", "None (signature only)"], ["bearer", "Bearer token"], ["basic", "Basic (user:password)"], ["header", "Custom header"]].map(([v, l]) => <SelectItem value={v}>{l}</SelectItem>)}</SelectContent>
+      </Select>
     </label>
     <label class={label}>Header name <input class={inputClass} name="config.webhookAuth.header" value={c.webhookAuth.header} placeholder="Only for a custom header, e.g. X-Api-Key" /></label>
     <label class={label}>Value <input class={inputClass} type="password" name="config.webhookAuth.value" placeholder={secret(c.webhookAuth.value) || "The token, user:password or header value"} autocomplete="off" /></label>

@@ -1,0 +1,48 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { cn } from "@/lib/utils";
+
+interface Props extends HTMLAttributes<"div"> {
+  value: string;
+  disabled?: boolean;
+  class?: string;
+}
+
+const {
+  value,
+  disabled = false,
+  class: className = "",
+  ...rest
+} = Astro.props as Props;
+---
+
+<div
+  {...rest}
+  role="option"
+  tabindex={disabled ? -1 : 0}
+  data-slot="select-item"
+  data-value={value}
+  data-disabled={disabled ? "" : undefined}
+  class={cn(
+    "focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+    "group/item relative flex w-full cursor-default items-center outline-hidden select-none",
+    "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0",
+    className,
+  )}
+>
+  <span
+    data-slot="select-item-text"
+    class="flex flex-1 gap-2 shrink-0 whitespace-nowrap"
+    ><slot /></span
+  >
+
+  <span
+    data-slot="select-item-indicator"
+    class="pointer-events-none absolute right-2 flex size-4 items-center justify-center"
+  >
+    <span class="hidden items-center justify-center group-data-[selected]/item:inline-flex">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 6L9 17l-5-5"/></svg>
+    </span>
+  </span>
+</div>

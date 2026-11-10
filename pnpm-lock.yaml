@@ -14,6 +14,9 @@ importers:
       '@astrojs/node':
         specifier: ^11.1.9
         version: 11.1.9(astro@7.4.4(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
+      '@data-slot/select':
+        specifier: ^1.1.3
+        version: 1.1.3
       '@lucide/astro':
         specifier: ^1.66.0
         version: 1.66.0(astro@7.4.4(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
@@ -454,6 +457,12 @@ packages:
   '@clack/prompts@1.8.1':
     resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
+
+  '@data-slot/core@1.1.3':
+    resolution: {integrity: sha512-997u23in9/+eH3x988adFnBFSucPYualy7EpZX23gegtNQJDuDgBNqiuCFFeX79gnawwnZfd1Gj6kTDbI3v7qg==}
+
+  '@data-slot/select@1.1.3':
+    resolution: {integrity: sha512-o90cowE4P9p6tgEeGEmkTdf+lGOusqekNOSokp0f62P+uqTJxZE9//JLed5Cji59C++6spI0JtlBAZmPXYw7hA==}
 
   '@dotenvx/dotenvx@1.75.1':
     resolution: {integrity: sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ==}
@@ -3758,6 +3767,12 @@ snapshots:
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
+
+  '@data-slot/core@1.1.3': {}
+
+  '@data-slot/select@1.1.3':
+    dependencies:
+      '@data-slot/core': 1.1.3
 
   '@dotenvx/dotenvx@1.75.1':
     dependencies:

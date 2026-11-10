@@ -1,6 +1,7 @@
 ---
 // Laid out like the comments moderation screen: views (and forms) on the left, the list on the right.
 import { button, inputClass } from "@/components/ui/island";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { counts, forms, PAGE, PER_PAGE, submissions, type Form, type Submission, type View } from "@/plugins/forms/lib/forms";
 import { ChevronRight, Download, FileText, Inbox as InboxIcon, Mail, Paperclip, Search, ShieldX, Star } from "@lucide/astro";
 
@@ -48,7 +49,6 @@ const link = (over: Record<string, string | number>) => {
   for (const [k, v] of Object.entries(over)) v === "" ? p.delete(k) : p.set(k, String(v));
   return `?${p}`;
 };
-const select = inputClass.replace("w-full", "w-auto") + " h-8";
 const current = VIEWS.find((v) => v.id === view)!;
 const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex shrink-0 items-center gap-3 rounded-lg px-2 py-2";
 ---
@@ -118,18 +118,22 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
         </label>
       </header>
       <div class="flex flex-wrap items-center gap-2 border-b px-6 py-2">
-        <select class={select} name="days" aria-label="Date range">
-          {[[0, "All time"], [7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => <option value={v} selected={v === days}>{l}</option>)}
-        </select>
-        <select class={select} name="order" aria-label="Order">
-          <option value="new" selected={order === "new"}>Newest first</option>
-          <option value="old" selected={order === "old"}>Oldest first</option>
-        </select>
-        <select class={select} name="per" aria-label="Per page">
-          {PER_PAGE.map((p) => <option value={p} selected={p === perPage}>{p} per page</option>)}
-        </select>
+        <Select name="days" defaultValue={String(days)} size="sm" data-filter>
+          <SelectTrigger size="sm" aria-label="Date range"><SelectValue /></SelectTrigger>
+          <SelectContent>{[[0, "All time"], [7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => <SelectItem value={String(v)}>{l}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select name="order" defaultValue={order} size="sm" data-filter>
+          <SelectTrigger size="sm" aria-label="Order"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="new">Newest first</SelectItem><SelectItem value="old">Oldest first</SelectItem></SelectContent>
+        </Select>
+        <Select name="per" defaultValue={String(perPage)} size="sm" data-filter>
+          <SelectTrigger size="sm" aria-label="Per page"><SelectValue /></SelectTrigger>
+          <SelectContent>{PER_PAGE.map((p) => <SelectItem value={String(p)}>{p} per page</SelectItem>)}</SelectContent>
+        </Select>
         <noscript><button class={button("outline", "sm")}>Apply</button></noscript>
-        {form && <a class={button("outline", "sm") + " ml-auto"} href={`/api/forms/${form.key}/export?status=${view === "spam" ? "spam" : "inbox"}`} download><Download /> Export CSV</a>}
+        <a class={button("outline", "sm") + " ml-auto"} href={`${(form ?? only) ? `/api/forms/${(form ?? only)!.key}/export` : "/api/export"}?status=${view === "spam" ? "spam" : "inbox"}`} download>
+          <Download /> Export CSV
+        </a>
       </div>
     </form>
 
@@ -213,7 +217,7 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
 <script>
   import { post } from "@/lib/post";
   const filters = document.querySelector<HTMLFormElement>("[data-filters]")!;
-  filters.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => filters.requestSubmit()));
+  filters.querySelectorAll("[data-filter]").forEach((s) => s.addEventListener("select:change", () => filters.requestSubmit()));
   const root = document.querySelector<HTMLElement>("[data-bulk-root]")!;
   const picks = [...root.querySelectorAll<HTMLInputElement>("[data-pick]")];
   const all = root.querySelector<HTMLInputElement>("[data-all]")!;

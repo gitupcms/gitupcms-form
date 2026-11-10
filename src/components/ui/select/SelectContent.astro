@@ -1,0 +1,94 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { cn } from "@/lib/utils";
+import { cva } from "class-variance-authority";
+
+interface Props extends HTMLAttributes<"div"> {
+  class?: string;
+  size?: "sm" | "default" | "lg";
+  position?: "item-aligned" | "popper";
+  align?: "start" | "center" | "end";
+  alignOffset?: number;
+  side?: "top" | "bottom";
+  sideOffset?: number;
+}
+
+const {
+  class: className = "",
+  size = "default",
+  position = "item-aligned",
+  align = "center",
+  alignOffset = 0,
+  side = "bottom",
+  sideOffset = 4,
+  ...rest
+} = Astro.props as Props;
+
+const contentVariants = cva(
+  [
+    "group/select-content relative isolate z-50",
+    "origin-(--transform-origin) overflow-x-hidden overflow-y-auto data-[align-trigger=true]:animate-none",
+  ],
+  {
+    variants: {
+      position: {
+        "item-aligned": "",
+        popper: "",
+      },
+      side: {
+        top: "",
+        bottom: "",
+      },
+    },
+    defaultVariants: {
+      position: "item-aligned",
+      side: "bottom",
+    },
+  },
+);
+---
+
+<div
+  {...rest}
+  hidden
+  data-slot="select-content"
+  data-size={size}
+  data-position={position}
+  data-align-trigger={position === "item-aligned"}
+  data-align={align}
+  data-align-offset={alignOffset}
+  data-side={side}
+  data-side-offset={sideOffset}
+  class={cn(
+    "bg-popover text-popover-foreground ring-foreground/10 min-w-36 rounded-md shadow-md ring-1 rounded-lg",
+    contentVariants({ position, side }),
+    "max-h-(--available-height) w-(--anchor-width)",
+    className,
+  )}
+>
+  <div
+    data-slot="select-scroll-up-button"
+    class="bg-popover z-10 flex cursor-default items-center justify-center py-1 [&_svg:not([class*='size-'])]:size-4 top-0 w-full"
+    hidden
+  >
+    <slot name="scroll-up"
+      ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m18 15l-6-6l-6 6"/></svg></slot
+    >
+  </div>
+  <div
+    data-slot="select-viewport"
+    data-position={position}
+    class="max-h-[var(--select-content-available-height,300px)] overflow-x-hidden overflow-y-auto"
+  >
+    <slot />
+  </div>
+  <div
+    data-slot="select-scroll-down-button"
+    class="bg-popover z-10 flex cursor-default items-center justify-center py-1 [&_svg:not([class*='size-'])]:size-4 bottom-0 w-full"
+    hidden
+  >
+    <slot name="scroll-down"
+      ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9l6 6l6-6"/></svg></slot
+    >
+  </div>
+</div>

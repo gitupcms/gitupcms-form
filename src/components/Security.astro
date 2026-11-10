@@ -1,4 +1,5 @@
 ---
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/island";
 import { SENSITIVITY } from "@/plugins/forms/lib/config";
@@ -44,9 +45,10 @@ const providers = [
     </p>
     <label class={label}>
       Provider
-      <select class={inputClass} name="config.captcha.provider">
-        {providers.map(([v, l]) => <option value={v} selected={c.captcha.provider === v}>{l}</option>)}
-      </select>
+<Select name="config.captcha.provider" defaultValue={c.captcha.provider} class="w-full">
+        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>{providers.map(([v, l]) => <SelectItem value={v}>{l}</SelectItem>)}</SelectContent>
+      </Select>
     </label>
     <label class={label}>Site key <input class={inputClass} name="config.captcha.siteKey" value={c.captcha.siteKey} placeholder="Not needed for Altcha" /></label>
     <label class={label}>Secret key <input class={inputClass} type="password" name="config.captcha.secret" placeholder={c.captcha.secret ? "Saved (leave empty to keep it)" : "Not needed for Altcha"} autocomplete="off" /></label>
@@ -62,9 +64,10 @@ const providers = [
     <h2 class="text-sm font-medium">Spam filter</h2>
     <label class={label}>
       Sensitivity
-      <select class={inputClass} name="config.sensitivity">
-        {Object.entries(SENSITIVITY).map(([k, v]) => <option value={k} selected={c.sensitivity === k}>{k[0].toUpperCase() + k.slice(1)} (spam at score {v})</option>)}
-      </select>
+<Select name="config.sensitivity" defaultValue={c.sensitivity} class="w-full">
+        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>{Object.entries(SENSITIVITY).map(([k, v]) => <SelectItem value={k}>{k[0].toUpperCase() + k.slice(1)} (spam at score {v})</SelectItem>)}</SelectContent>
+      </Select>
       <span class={hint}>High catches more spam but may flag real messages; check the Spam tab now and then.</span>
     </label>
     <label class={label}>
