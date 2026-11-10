@@ -79,6 +79,24 @@ export const widgetSnippet = (c: FormConfig["captcha"], challengeUrl: string) =>
     "": "",
     turnstile: `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>\n<div class="cf-turnstile" data-sitekey="${c.siteKey}"></div>`,
     hcaptcha: `<script src="https://js.hcaptcha.com/1/api.js" async defer></script>\n<div class="h-captcha" data-sitekey="${c.siteKey}"></div>`,
-    recaptcha: `<script src="https://www.google.com/recaptcha/api.js" async defer></script>\n<div class="g-recaptcha" data-sitekey="${c.siteKey}"></div>`,
+    recaptcha: `<!-- reCAPTCHA v2 ("I'm not a robot" box) -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<div class="g-recaptcha" data-sitekey="${c.siteKey}"></div>
+
+<!-- or reCAPTCHA v3 (no box; a token is fetched when the form is sent) -->
+<script src="https://www.google.com/recaptcha/api.js?render=${c.siteKey}"></script>
+<input type="hidden" name="g-recaptcha-response">
+<script>
+  document.currentScript.closest("form").addEventListener("submit", (e) => {
+    const field = e.target.querySelector('[name="g-recaptcha-response"]');
+    if (field.value) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    grecaptcha.ready(() => grecaptcha.execute("${c.siteKey}", { action: "submit" }).then((token) => {
+      field.value = token;
+      e.target.requestSubmit();
+    }));
+  }, true);
+</script>`,
     altcha: `<script async defer type="module" src="https://cdn.jsdelivr.net/gh/altcha-org/altcha/dist/altcha.min.js"></script>\n<altcha-widget challengeurl="${challengeUrl}"></altcha-widget>`,
   })[c.provider];
