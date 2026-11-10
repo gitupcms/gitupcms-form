@@ -108,8 +108,8 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 Kanallar gerçek hesaplarla test edildi (Telegram, Notion, Zapier, Mailchimp; :4390'daki gerçek formdan e-posta, Zapier
 ve Mailchimp HTTP 200). Yapılmayanlar:
 
-- **Mailchimp onayı:** onay e-postaları geldi, ama bağlantı Mailchimp'in CAPTCHA sayfasına gidiyor; CAPTCHA'yı kullanıcı
-  geçmeli. +form ve +gitupcms adresleri "test" kitlesinde hâlâ pending.
+- ~~**Mailchimp onayı:**~~ yapıldı: iki onay bağlantısı tıklandı, CAPTCHA kullanıcı tarafından geçildi, sayfa
+  "Your subscription to our list has been confirmed" dedi. Double opt-in uçtan uca çalışıyor.
 - **Mailchimp gönderen alan adı:** kitle `fuatcangenc@gmail.com` adresinden gönderiyor, hesapta doğrulanmış domain yok,
   bu yüzden onay e-postaları spam'e düştü. Yapılacak: kendi domainini Account → Domains'te doğrula, DNS'e CNAME/TXT ekle,
   kitlenin gönderenini o domaindeki bir adres yap. (Hangi domain? Kullanıcı söyleyecek.)
