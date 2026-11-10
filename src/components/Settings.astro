@@ -1,7 +1,9 @@
 ---
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { button, inputClass, sectionLabel } from "@/components/ui/island";
+import { button, sectionLabel } from "@/components/ui/island";
 import { RETENTION_DAYS, SPAM_DAYS, workspaces, type Form } from "@/plugins/forms/lib/forms";
 
 interface Props {
@@ -14,14 +16,14 @@ const hint = "text-muted-foreground text-xs";
 
 <div class="flex flex-col gap-6">
   <form class="flex flex-col gap-4 rounded-lg border p-4" data-save="reload">
-    <label class="flex items-start gap-3 text-sm">
-      <input type="checkbox" class="mt-1 size-4" name="config.active" checked={form.config.active} />
-      <span class="flex flex-col gap-1">
+    <div class="flex items-start gap-3 text-sm">
+      <Checkbox id="cb-config-active" name="config.active" checked={form.config.active} class="mt-0.5" />
+      <label for="cb-config-active" class="flex flex-col gap-1">
         Accept submissions
         <span class={hint}>Turn off to pause the form: posts get "not accepting submissions" and nothing is stored.</span>
-      </span>
-    </label>
-    <label class={label}>Name <input class={inputClass} name="name" value={form.name} required maxlength="100" /></label>
+      </label>
+    </div>
+    <label class={label}>Name <Input name="name" value={form.name} required maxlength="100" /></label>
     <label class={label}>
       Workspace
 <Select name="workspaceId" defaultValue={form.workspaceId} class="w-full">
@@ -32,7 +34,7 @@ const hint = "text-muted-foreground text-xs";
     </label>
     <label class={label}>
       After sending, go to
-      <input class={inputClass} name="redirect" value={form.redirect} placeholder="https://example.com/thanks" />
+      <Input name="redirect" value={form.redirect} placeholder="https://example.com/thanks" />
       <span class={hint}>Empty: the form's <code>_redirect</code> field on the same site, else a plain thank-you page.</span>
     </label>
     <label class={label}>
@@ -43,13 +45,13 @@ const hint = "text-muted-foreground text-xs";
       </Select>
       <span class={hint}>Old submissions and their files are deleted for good. Spam is always deleted after {SPAM_DAYS} days.</span>
     </label>
-    <label class="flex items-start gap-3 text-sm">
-      <input type="checkbox" class="mt-1 size-4" name="config.archive" checked={form.config.archive} />
-      <span class="flex flex-col gap-1">
+    <div class="flex items-start gap-3 text-sm">
+      <Checkbox id="cb-config-archive" name="config.archive" checked={form.config.archive} class="mt-0.5" />
+      <label for="cb-config-archive" class="flex flex-col gap-1">
         Store submissions
         <span class={hint}>Off: each submission is only emailed and sent to your channels, then deleted. Nothing stays in the inbox, uploaded files are not kept and emails have no inbox links. Analytics still counts them.</span>
-      </span>
-    </label>
+      </label>
+    </div>
     <div class="flex items-center gap-3">
       <Button type="submit">Save</Button>
       <span class="text-sm" role="status" data-status></span>
@@ -60,7 +62,7 @@ const hint = "text-muted-foreground text-xs";
     <h2 class={sectionLabel}>Delete form</h2>
     <p class={hint}>Deletes the form, every submission and every uploaded file. Posts to its address stop working.</p>
     <div class="flex items-center gap-2">
-      <input class={inputClass} placeholder={`Type ${form.name} to confirm`} aria-label="Form name" data-confirm />
+      <Input placeholder={`Type ${form.name} to confirm`} aria-label="Form name" data-confirm />
       <button class={button("destructive")} data-delete>Delete</button>
     </div>
   </section>

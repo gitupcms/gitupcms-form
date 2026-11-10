@@ -1,8 +1,8 @@
 ---
+import { Input } from "@/components/ui/input";
 import Base from "@/layouts/Base.astro";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { inputClass } from "@/components/ui/island";
 import { adminOf, githubEnabled, googleEnabled, hasAdmin, turnstileSiteKey } from "@/lib/admin";
 import { inviteEmail } from "@/lib/team";
 
@@ -23,9 +23,9 @@ const error = Astro.url.searchParams.get("error");
       </CardHeader>
       <CardContent>
         <form class="flex flex-col gap-3" data-form={setup ? "sign-up" : "sign-in"}>
-          {setup && <input class={inputClass} name="name" placeholder="Your name" autocomplete="name" required aria-label="Name" />}
-          <input class={inputClass} name="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email" value={invite ?? undefined} readonly={!!invite} />
-          <input class={inputClass} name="password" type="password" placeholder={setup ? "Password (10+ characters)" : "Password"} minlength={setup ? 10 : undefined} autocomplete={setup ? "new-password" : "current-password"} required aria-label="Password" />
+          {setup && <Input name="name" placeholder="Your name" autocomplete="name" required aria-label="Name" />}
+          <Input name="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email" value={invite ?? undefined} readonly={!!invite} />
+          <Input name="password" type="password" placeholder={setup ? "Password (10+ characters)" : "Password"} minlength={setup ? 10 : undefined} autocomplete={setup ? "new-password" : "current-password"} required aria-label="Password" />
           {turnstileSiteKey && <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>}
           <Button type="submit">{setup ? "Create account" : "Sign in"}</Button>
           {githubEnabled && <Button type="button" variant="outline" data-social="github">{setup ? "Continue with GitHub" : "Sign in with GitHub"}</Button>}

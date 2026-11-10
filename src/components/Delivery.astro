@@ -1,7 +1,10 @@
 ---
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { button, inputClass, sectionLabel } from "@/components/ui/island";
+import { button, sectionLabel } from "@/components/ui/island";
 import { SHEETS_SCRIPT } from "@/plugins/forms/lib/channels";
 import type { Form } from "@/plugins/forms/lib/forms";
 
@@ -21,19 +24,19 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     <h2 class="text-sm font-medium">Email</h2>
     <label class={label}>
       Send submissions to
-      <input class={inputClass} name="recipients" value={form.recipients} placeholder="you@example.com, team@example.com" />
+      <Input name="recipients" value={form.recipients} placeholder="you@example.com, team@example.com" />
       <span class={hint}>Comma-separated. Replies go to the sender. Leave empty for no email. Rules can send some submissions elsewhere.</span>
     </label>
-    <label class="flex items-start gap-3 text-sm">
-      <input type="checkbox" class="mt-1 size-4" name="config.autoReply.enabled" checked={c.autoReply.enabled} />
-      <span class="flex flex-col gap-1">
+    <div class="flex items-start gap-3 text-sm">
+      <Checkbox id="cb-config-autoReply-enabled" name="config.autoReply.enabled" checked={c.autoReply.enabled} class="mt-0.5" />
+      <label for="cb-config-autoReply-enabled" class="flex flex-col gap-1">
         Auto-reply to the sender
         <span class={hint}>Goes to the form's <code>email</code> (or <code>_replyto</code>) field, at most once a day per address. Not sent for spam.</span>
-      </span>
-    </label>
+      </label>
+    </div>
     <label class={label}>
       Intro text
-      <textarea class={inputClass + " min-h-20 py-2"} name="config.email.intro" maxlength="2000" placeholder="Shown at the top of every notification email, e.g. who should answer it.">{c.email.intro}</textarea>
+      <Textarea class="min-h-20" name="config.email.intro" maxlength="2000" placeholder="Shown at the top of every notification email, e.g. who should answer it.">{c.email.intro}</Textarea>
     </label>
     <label class={label}>
       Grouping
@@ -43,10 +46,10 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
       </Select>
       <span class={hint}>{c.archive ? "Channels, webhooks and the auto-reply still go out at once. Send again from the inbox emails one right away." : "Needs stored submissions (Settings)."}</span>
     </label>
-    <label class={label}>Auto-reply subject <input class={inputClass} name="config.autoReply.subject" value={c.autoReply.subject} maxlength="200" /></label>
+    <label class={label}>Auto-reply subject <Input name="config.autoReply.subject" value={c.autoReply.subject} maxlength="200" /></label>
     <label class={label}>
       Auto-reply text
-      <textarea class={inputClass + " min-h-32 py-2"} name="config.autoReply.body">{c.autoReply.body}</textarea>
+      <Textarea class="min-h-32" name="config.autoReply.body">{c.autoReply.body}</Textarea>
       <span class={hint}><code>{"{{name}}"}</code> puts in a field's value (shortened, links removed so the reply cannot carry spam).</span>
     </label>
     <div class="flex items-center gap-3">
@@ -61,7 +64,7 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     <h2 class="text-sm font-medium">Webhook</h2>
     <label class={label}>
       Address
-      <input class={inputClass} name="webhookUrl" value={form.webhookUrl} placeholder="https://hooks.example.com/forms" />
+      <Input name="webhookUrl" value={form.webhookUrl} placeholder="https://hooks.example.com/forms" />
       <span class={hint}>Gets each submission as JSON (not spam), signed with the secret below; a failed post is tried once more.</span>
     </label>
     <label class={label}>
@@ -71,8 +74,8 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
         <SelectContent>{[["", "None (signature only)"], ["bearer", "Bearer token"], ["basic", "Basic (user:password)"], ["header", "Custom header"]].map(([v, l]) => <SelectItem value={v}>{l}</SelectItem>)}</SelectContent>
       </Select>
     </label>
-    <label class={label}>Header name <input class={inputClass} name="config.webhookAuth.header" value={c.webhookAuth.header} placeholder="Only for a custom header, e.g. X-Api-Key" /></label>
-    <label class={label}>Value <input class={inputClass} type="password" name="config.webhookAuth.value" placeholder={secret(c.webhookAuth.value) || "The token, user:password or header value"} autocomplete="off" /></label>
+    <label class={label}>Header name <Input name="config.webhookAuth.header" value={c.webhookAuth.header} placeholder="Only for a custom header, e.g. X-Api-Key" /></label>
+    <label class={label}>Value <Input type="password" name="config.webhookAuth.value" placeholder={secret(c.webhookAuth.value) || "The token, user:password or header value"} autocomplete="off" /></label>
     <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
   </form>
 
@@ -83,7 +86,7 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
       timestamps.
     </p>
     <div class="flex items-center gap-2">
-      <input class={inputClass + " font-mono"} type="password" value={form.webhookSecret} readonly aria-label="Webhook secret" data-secret />
+      <Input class="font-mono" type="password" value={form.webhookSecret} readonly aria-label="Webhook secret" data-secret />
       <button class={button("outline", "sm")} data-reveal>Show</button>
       <button class={button("outline", "sm")} data-rotate>New secret</button>
     </div>
@@ -94,17 +97,17 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     <p class={hint}>Each submission (not spam) is posted as a short message. Leave a box empty to turn that one off.</p>
     <label class={label}>
       Slack incoming webhook
-      <input class={inputClass} name="config.slack" value={c.slack} placeholder="https://hooks.slack.com/services/…" />
+      <Input name="config.slack" value={c.slack} placeholder="https://hooks.slack.com/services/…" />
       <span class={hint}>Slack: Apps → Incoming Webhooks → Add to a channel.</span>
     </label>
     <label class={label}>
       Discord webhook
-      <input class={inputClass} name="config.discord" value={c.discord} placeholder="https://discord.com/api/webhooks/…" />
+      <Input name="config.discord" value={c.discord} placeholder="https://discord.com/api/webhooks/…" />
       <span class={hint}>Discord: channel settings → Integrations → Webhooks.</span>
     </label>
     <div class="grid gap-4 sm:grid-cols-2">
-      <label class={label}>Telegram bot token <input class={inputClass} type="password" name="config.telegram.token" placeholder={secret(c.telegram.token) || "123456:ABC-… from @BotFather"} autocomplete="off" /></label>
-      <label class={label}>Telegram chat ID <input class={inputClass} name="config.telegram.chatId" value={c.telegram.chatId} placeholder="-1001234567890" /></label>
+      <label class={label}>Telegram bot token <Input type="password" name="config.telegram.token" placeholder={secret(c.telegram.token) || "123456:ABC-… from @BotFather"} autocomplete="off" /></label>
+      <label class={label}>Telegram chat ID <Input name="config.telegram.chatId" value={c.telegram.chatId} placeholder="-1001234567890" /></label>
     </div>
     <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
   </form>
@@ -113,7 +116,7 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     <h2 class="text-sm font-medium">Spreadsheets and databases</h2>
     <label class={label}>
       Google Sheets script address
-      <input class={inputClass} name="config.sheets" value={c.sheets} placeholder="https://script.google.com/macros/s/…/exec" />
+      <Input name="config.sheets" value={c.sheets} placeholder="https://script.google.com/macros/s/…/exec" />
       <span class={hint}>In the sheet: Extensions → Apps Script, paste the script below, Deploy → Web app (anyone may access), copy its address here. New fields become new columns.</span>
     </label>
     <details class="text-sm">
@@ -121,14 +124,14 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
       <pre class="bg-muted mt-2 overflow-x-auto rounded-lg p-3 text-xs"><code>{SHEETS_SCRIPT}</code></pre>
     </details>
     <div class="grid gap-4 sm:grid-cols-2">
-      <label class={label}>Notion integration token <input class={inputClass} type="password" name="config.notion.token" placeholder={secret(c.notion.token) || "ntn_… or secret_…"} autocomplete="off" /></label>
-      <label class={label}>Notion database (link or ID) <input class={inputClass} name="config.notion.database" value={c.notion.database} /></label>
+      <label class={label}>Notion integration token <Input type="password" name="config.notion.token" placeholder={secret(c.notion.token) || "ntn_… or secret_…"} autocomplete="off" /></label>
+      <label class={label}>Notion database (link or ID) <Input name="config.notion.database" value={c.notion.database} /></label>
     </div>
     <p class={hint}>Notion: create an integration, then share the database with it (••• → Connections). The first field becomes the page title.</p>
     <div class="grid gap-4 sm:grid-cols-3">
-      <label class={label}>Airtable token <input class={inputClass} type="password" name="config.airtable.token" placeholder={secret(c.airtable.token) || "pat…"} autocomplete="off" /></label>
-      <label class={label}>Base ID <input class={inputClass} name="config.airtable.base" value={c.airtable.base} placeholder="app…" /></label>
-      <label class={label}>Table <input class={inputClass} name="config.airtable.table" value={c.airtable.table} placeholder="Submissions" /></label>
+      <label class={label}>Airtable token <Input type="password" name="config.airtable.token" placeholder={secret(c.airtable.token) || "pat…"} autocomplete="off" /></label>
+      <label class={label}>Base ID <Input name="config.airtable.base" value={c.airtable.base} placeholder="app…" /></label>
+      <label class={label}>Table <Input name="config.airtable.table" value={c.airtable.table} placeholder="Submissions" /></label>
     </div>
     <p class={hint}>Airtable: a personal access token with data.records:write on the base. Name the columns like the form's fields (name or Name); fields without a column are left out.</p>
     <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
@@ -138,13 +141,13 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
     <h2 class="text-sm font-medium">Zapier and Mailchimp</h2>
     <label class={label}>
       Zapier webhook
-      <input class={inputClass} name="config.zapier" value={c.zapier} placeholder="https://hooks.zapier.com/hooks/catch/…" />
+      <Input name="config.zapier" value={c.zapier} placeholder="https://hooks.zapier.com/hooks/catch/…" />
       <span class={hint}>In a Zap: trigger "Webhooks by Zapier" → Catch Hook, copy its address here. Each field arrives on its own.</span>
     </label>
     <div class="grid gap-4 sm:grid-cols-3">
-      <label class={label}>Mailchimp API key <input class={inputClass} type="password" name="config.mailchimp.key" placeholder={secret(c.mailchimp.key) || "…-us21"} autocomplete="off" /></label>
-      <label class={label}>Audience ID <input class={inputClass} name="config.mailchimp.audience" value={c.mailchimp.audience} placeholder="a1b2c3d4e5" /></label>
-      <label class={label}>Only when this field is filled <input class={inputClass} name="config.mailchimp.field" value={c.mailchimp.field} placeholder="newsletter" /></label>
+      <label class={label}>Mailchimp API key <Input type="password" name="config.mailchimp.key" placeholder={secret(c.mailchimp.key) || "…-us21"} autocomplete="off" /></label>
+      <label class={label}>Audience ID <Input name="config.mailchimp.audience" value={c.mailchimp.audience} placeholder="a1b2c3d4e5" /></label>
+      <label class={label}>Only when this field is filled <Input name="config.mailchimp.field" value={c.mailchimp.field} placeholder="newsletter" /></label>
     </div>
     <p class={hint}>
       Mailchimp: the sender's email joins the audience as pending; Mailchimp asks them to confirm. Put a newsletter checkbox in the form and its name above, so only people who

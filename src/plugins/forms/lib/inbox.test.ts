@@ -10,6 +10,7 @@ const { db } = await import("../../../lib/db.ts");
 const f = await import("./forms.ts");
 const { analytics, monthUsage } = await import("./stats.ts");
 const { defaults, patchConfig } = await import("./config.ts");
+const { viewCsv } = await import("./csv.ts");
 
 const form = f.formByKey(f.createForm("Contact", "owner@example.com"))!;
 const save = (name: string, origin = "https://site.test", country = "") =>
@@ -60,4 +61,15 @@ test("a digest needs stored submissions", () => {
   assert.throws(() => patchConfig(defaults(), { archive: false, email: { intro: "", digest: "daily" } }), /digest needs stored/);
   assert.equal(patchConfig(defaults(), { email: { intro: "Hi team", digest: "hourly" } }).email.digest, "hourly");
   assert.throws(() => patchConfig(defaults(), { email: { digest: "weekly" } }), /valid digest/);
+});
+
+test("CSV export follows the view, search and date filters", async () => {
+  const csv = async (query: string) => (await viewCsv(form.key, new URLSearchParams(query), "Contact").text()).trim().split("\r\n");
+  const all = await csv("");
+  assert.equal(all.length, 3, "header and two rows");
+  assert.match(all[0], /^\uFEFF?id,submitted_at,name,message,files$/);
+  assert.equal((await csv("q=bob")).length, 2);
+  assert.equal((await csv("days=7")).length, 2, "Ada is ten days old");
+  assert.equal((await csv("view=starred")).length, 2);
+  assert.equal((await csv("status=spam")).length, 1, "old ?status=spam still means spam");
 });

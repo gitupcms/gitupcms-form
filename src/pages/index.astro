@@ -1,7 +1,7 @@
 ---
+import { Input } from "@/components/ui/input";
 import Admin from "@/layouts/Admin.astro";
 import { Button } from "@/components/ui/button";
-import { inputClass } from "@/components/ui/island";
 import { forms } from "@/plugins/forms/lib/forms";
 
 const workspace = Astro.locals.workspace;
@@ -33,7 +33,7 @@ const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium",
       )
     }
     <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-create>
-      <label class="flex flex-1 flex-col gap-1 text-sm">Name <input class={inputClass} name="name" placeholder="Contact form" required maxlength="100" /></label>
+      <label class="flex flex-1 flex-col gap-1 text-sm">Name <Input name="name" placeholder="Contact form" required maxlength="100" /></label>
       <Button type="submit">Add form</Button>
     </form>
     <p role="alert" class="text-destructive text-sm empty:hidden" data-error></p>

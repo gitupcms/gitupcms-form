@@ -1,7 +1,7 @@
 ---
+import { Input } from "@/components/ui/input";
 import Admin from "@/layouts/Admin.astro";
 import { Button } from "@/components/ui/button";
-import { inputClass } from "@/components/ui/island";
 import { SPAM_DAYS } from "@/plugins/forms/lib/forms";
 ---
 
@@ -15,7 +15,7 @@ import { SPAM_DAYS } from "@/plugins/forms/lib/forms";
       </p>
     </div>
     <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-find>
-      <label class="flex flex-1 flex-col gap-1 text-sm">Email address <input class={inputClass} name="email" type="email" placeholder="name@example.com" required /></label>
+      <label class="flex flex-1 flex-col gap-1 text-sm">Email address <Input name="email" type="email" placeholder="name@example.com" required /></label>
       <Button type="submit">Find</Button>
     </form>
     <p role="status" class="text-sm empty:hidden" data-result></p>

@@ -268,11 +268,24 @@ export const VIEWS = ["inbox", "unread", "starred", "spam"] as const;
 export type View = (typeof VIEWS)[number];
 const VIEW_SQL: Record<View, string> = { inbox: "status = 'inbox'", unread: "status = 'inbox' AND read_at IS NULL", starred: "starred = 1", spam: "status = 'spam'" };
 /** One form's key, a list of keys (a workspace), or null for every form. */
-type Scope = string | string[] | null;
+export type Scope = string | string[] | null;
 const scopeSql = (scope: Scope): [string, string[]] =>
   scope === null ? ["", []] : typeof scope === "string" ? [" AND form_key = ?", [scope]] : [` AND form_key IN (${scope.map(() => "?").join(", ") || "NULL"})`, scope];
 export type ListOptions = { perPage?: number; days?: number; order?: "new" | "old" };
 /** One page of submissions in a view, newest first unless asked; `q` searches every field, `days` keeps the recent ones. */
+/** The inbox filters in an admin URL (?view=&q=&days=&order=&per=&page=), checked; the list and its CSV export read the same ones. */
+export const listQuery = (p: URLSearchParams) => {
+  // `tab=spam`, `show=` and the export's `status=spam` are old addresses (emails and bookmarks still use them).
+  const asked = p.get("view") ?? (p.get("tab") === "spam" || p.get("status") === "spam" ? "spam" : p.get("show"));
+  return {
+    view: (VIEWS as readonly string[]).includes(asked ?? "") ? (asked as View) : "inbox",
+    q: (p.get("q") ?? "").slice(0, 200),
+    page: Math.max(1, Number(p.get("page")) || 1),
+    days: [7, 30, 90].includes(Number(p.get("days"))) ? Number(p.get("days")) : 0,
+    order: p.get("order") === "old" ? ("old" as const) : ("new" as const),
+    perPage: PER_PAGE.includes(Number(p.get("per"))) ? Number(p.get("per")) : PAGE,
+  };
+};
 export const submissions = (scope: Scope, view: View, q = "", page = 1, o: ListOptions = {}) => {
   const perPage = o.perPage ?? PAGE;
   const [sql, keys] = scopeSql(scope);
@@ -289,9 +302,6 @@ export const submissions = (scope: Scope, view: View, q = "", page = 1, o: ListO
   const hits = db.prepare(select).all(...args).map((r) => toSubmission(r)!).filter((s) => values(s).some((v) => v.toLowerCase().includes(needle)));
   return { total: hits.length, items: hits.slice((page - 1) * perPage, page * perPage) };
 };
-/** Every submission of a form with this status, oldest first (CSV export). */
-export const allSubmissions = (formKey: string, status: "inbox" | "spam") =>
-  db.prepare("SELECT * FROM submission WHERE form_key = ? AND status = ? ORDER BY created_at, rowid").all(formKey, status).map((r) => toSubmission(r)!);
 export const counts = (scope: Scope) => {
   const [sql, keys] = scopeSql(scope);
   const r = db

@@ -1,8 +1,10 @@
 ---
 // Laid out like the comments moderation screen: views (and forms) on the left, the list on the right.
-import { button, inputClass } from "@/components/ui/island";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { button } from "@/components/ui/island";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { counts, forms, PAGE, PER_PAGE, submissions, type Form, type Submission, type View } from "@/plugins/forms/lib/forms";
+import { counts, forms, listQuery, PAGE, PER_PAGE, submissions, type Form, type Submission } from "@/plugins/forms/lib/forms";
 import { ChevronRight, Download, FileText, Inbox as InboxIcon, Mail, Paperclip, Search, ShieldX, Star } from "@lucide/astro";
 
 interface Props {
@@ -18,14 +20,7 @@ const VIEWS = [
   { id: "starred", label: "Starred", icon: Star, color: "text-yellow-500" },
   { id: "spam", label: "Spam", icon: ShieldX, color: "text-orange-500" },
 ] as const;
-// `tab=spam` and `show=` are the old addresses (emails and bookmarks still use them).
-const asked = params.get("view") ?? (params.get("tab") === "spam" ? "spam" : params.get("show"));
-const view: View = VIEWS.some((v) => v.id === asked) ? (asked as View) : "inbox";
-const q = (params.get("q") ?? "").slice(0, 200);
-const page = Math.max(1, Number(params.get("page")) || 1);
-const days = [7, 30, 90].includes(Number(params.get("days"))) ? Number(params.get("days")) : 0;
-const order = params.get("order") === "old" ? "old" : "new";
-const perPage = PER_PAGE.includes(Number(params.get("per"))) ? Number(params.get("per")) : PAGE;
+const { view, q, page, days, order, perPage } = listQuery(params);
 const all = form ? [] : forms().filter((f) => scope.includes(f.key));
 const only = form ? null : (all.find((f) => f.key === params.get("form")) ?? null);
 const where = form?.key ?? (only ? only.key : scope);
@@ -114,7 +109,7 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
         </h2>
         <label class="relative ml-auto w-full max-w-xs">
           <Search class="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-          <input class={inputClass + " h-9 pl-8"} name="q" value={q} placeholder="Search submissions" aria-label="Search submissions" />
+          <Input class="data-[size=default]:pl-8" name="q" value={q} placeholder="Search submissions" aria-label="Search submissions" />
         </label>
       </header>
       <div class="flex flex-wrap items-center gap-2 border-b px-6 py-2">
@@ -131,7 +126,7 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
           <SelectContent>{PER_PAGE.map((p) => <SelectItem value={String(p)}>{p} per page</SelectItem>)}</SelectContent>
         </Select>
         <noscript><button class={button("outline", "sm")}>Apply</button></noscript>
-        <a class={button("outline", "sm") + " ml-auto"} href={`${(form ?? only) ? `/api/forms/${(form ?? only)!.key}/export` : "/api/export"}?status=${view === "spam" ? "spam" : "inbox"}`} download>
+        <a class={button("outline", "sm") + " ml-auto"} href={`${form ? `/api/forms/${form.key}/export` : "/api/export"}${link({ tab: "", page: "", per: "" })}`} download title="Downloads what this view shows, filters and search included">
           <Download /> Export CSV
         </a>
       </div>
@@ -153,7 +148,7 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
         <table class="w-full text-sm">
           <thead class="text-muted-foreground border-b text-left text-xs">
             <tr>
-              <th class="w-8 px-3 py-2"><input type="checkbox" class="size-4" data-all aria-label="Select all on this page" disabled={!items.length} /></th>
+              <th class="w-8 px-3 py-2"><Checkbox data-all aria-label="Select all on this page" disabled={!items.length} /></th>
               <th class="px-3 py-2 font-medium">Submission</th>
               {!form && <th class="px-3 py-2 font-medium">Form</th>}
               <th class="px-3 py-2 font-medium">{view === "spam" ? "Score" : "Files"}</th>
@@ -173,7 +168,7 @@ const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex
             }
             {items.map((s) => (
               <tr class="hover:bg-muted/50 align-top">
-                <td class="px-3 py-3"><input type="checkbox" class="size-4" value={s.id} data-pick aria-label="Select" /></td>
+                <td class="px-3 py-3"><Checkbox value={s.id} data-pick aria-label="Select" /></td>
                 <td class="max-w-md px-3 py-3">
                   <a href={`/forms/${s.formKey}/${s.id}`} class="block min-w-0">
                     <span class:list={["flex items-center gap-1.5 text-xs", !s.read && view !== "spam" ? "font-semibold" : "text-muted-foreground"]}>

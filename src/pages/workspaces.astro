@@ -1,7 +1,7 @@
 ---
+import { Input } from "@/components/ui/input";
 import Admin from "@/layouts/Admin.astro";
 import { Button } from "@/components/ui/button";
-import { inputClass } from "@/components/ui/island";
 import { workspaces } from "@/plugins/forms/lib/forms";
 
 const all = workspaces();
@@ -19,7 +19,7 @@ const current = Astro.locals.workspace;
         all.map((w) => (
           <li class="flex flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <form class="flex flex-1 items-center gap-2" data-rename={w.id}>
-              <input class={inputClass} name="name" value={w.name} required maxlength="100" aria-label="Workspace name" />
+              <Input name="name" value={w.name} required maxlength="100" aria-label="Workspace name" />
               <Button type="submit" size="sm" variant="outline">Rename</Button>
             </form>
             <span class="flex items-center gap-2">
@@ -32,7 +32,7 @@ const current = Astro.locals.workspace;
       }
     </ul>
     <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-create>
-      <label class="flex flex-1 flex-col gap-1 text-sm">New workspace <input class={inputClass} name="name" placeholder="Client or project name" required maxlength="100" /></label>
+      <label class="flex flex-1 flex-col gap-1 text-sm">New workspace <Input name="name" placeholder="Client or project name" required maxlength="100" /></label>
       <Button type="submit">Create</Button>
     </form>
     <p role="alert" class="text-destructive text-sm empty:hidden" data-error></p>
