@@ -2,6 +2,7 @@
 import { tabList, tabTrigger } from "@/components/ui/island";
 import { appOrigin } from "@/lib/admin";
 import { counts, type Form } from "@/plugins/forms/lib/forms";
+import { ChartColumn, Code, GitBranch, Inbox, Send, Settings, Shield } from "@lucide/astro";
 
 interface Props {
   form: Form;
@@ -10,14 +11,13 @@ interface Props {
 const { form, tab } = Astro.props;
 const n = counts(form.key);
 const tabs = [
-  ["inbox", `Inbox${n.unread ? ` (${n.unread} new)` : n.inbox ? ` (${n.inbox})` : ""}`],
-  ["spam", `Spam${n.spam ? ` (${n.spam})` : ""}`],
-  ["analytics", "Analytics"],
-  ["setup", "Setup"],
-  ["delivery", "Delivery"],
-  ["rules", `Rules${form.config.rules.length ? ` (${form.config.rules.length})` : ""}`],
-  ["security", "Security"],
-  ["settings", "Settings"],
+  ["inbox", Inbox, `Submissions${n.unread ? ` (${n.unread} new)` : ""}`],
+  ["analytics", ChartColumn, "Analytics"],
+  ["setup", Code, "Setup"],
+  ["delivery", Send, "Delivery"],
+  ["rules", GitBranch, `Rules${form.config.rules.length ? ` (${form.config.rules.length})` : ""}`],
+  ["security", Shield, "Security"],
+  ["settings", Settings, "Settings"],
 ] as const;
 ---
 
@@ -30,7 +30,13 @@ const tabs = [
     </h1>
     <p class="text-muted-foreground font-mono text-xs">POST {appOrigin}/f/{form.key}</p>
   </div>
-  <nav class={tabList + " overflow-x-auto"} aria-label="Form">
-    {tabs.map(([id, label]) => <a href={`/forms/${form.key}?tab=${id}`} class={tabTrigger} data-state={tab === id ? "active" : undefined} aria-current={tab === id ? "page" : undefined}>{label}</a>)}
+  <nav class={tabList + " max-w-full overflow-x-auto"} aria-label="Form">
+    {
+      tabs.map(([id, Icon, label]) => (
+        <a href={`/forms/${form.key}?tab=${id}`} class={tabTrigger} data-state={tab === id ? "active" : undefined} aria-current={tab === id ? "page" : undefined}>
+          <Icon /> {label}
+        </a>
+      ))
+    }
   </nav>
 </div>

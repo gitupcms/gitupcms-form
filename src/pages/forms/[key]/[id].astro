@@ -16,7 +16,7 @@ const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${
 
 <Admin title={form.name}>
   <div class="flex flex-col gap-6">
-    <FormHeader form={form} tab={sub.status} />
+    <FormHeader form={form} tab="inbox" />
     <div class="flex flex-wrap items-center justify-between gap-3">
       <p class="text-muted-foreground text-sm">
         {date(sub.createdAt)}{sub.origin && ` · from ${sub.origin}`}{sub.status === "spam" && " · in Spam"}

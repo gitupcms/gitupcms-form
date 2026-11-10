@@ -1,13 +1,10 @@
 ---
 import Admin from "@/layouts/Admin.astro";
 import Inbox from "@/components/Inbox.astro";
-import { tabList, tabTrigger } from "@/components/ui/island";
-import { counts, forms } from "@/plugins/forms/lib/forms";
+import { forms } from "@/plugins/forms/lib/forms";
 
-const tab = Astro.url.searchParams.get("tab") === "spam" ? "spam" : "inbox";
 const workspace = Astro.locals.workspace;
 const keys = forms(workspace.id).map((f) => f.key);
-const n = counts(keys);
 ---
 
 <Admin title="Inbox">
@@ -16,10 +13,6 @@ const n = counts(keys);
       <h1 class="text-lg font-medium tracking-tight">Inbox</h1>
       <p class="text-muted-foreground text-sm">Every form's submissions in {workspace.name}, in one list.</p>
     </div>
-    <nav class={tabList} aria-label="Status">
-      <a href="?tab=inbox" class={tabTrigger} data-state={tab === "inbox" ? "active" : undefined}>Inbox{n.inbox ? ` (${n.inbox})` : ""}</a>
-      <a href="?tab=spam" class={tabTrigger} data-state={tab === "spam" ? "active" : undefined}>Spam{n.spam ? ` (${n.spam})` : ""}</a>
-    </nav>
-    <Inbox status={tab} scope={keys} />
+    <Inbox scope={keys} />
   </div>
 </Admin>

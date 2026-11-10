@@ -1,157 +1,244 @@
 ---
+// Laid out like the comments moderation screen: views (and forms) on the left, the list on the right.
 import { button, inputClass } from "@/components/ui/island";
 import { counts, forms, PAGE, PER_PAGE, submissions, type Form, type Submission, type View } from "@/plugins/forms/lib/forms";
+import { ChevronRight, Download, FileText, Inbox as InboxIcon, Mail, Paperclip, Search, ShieldX, Star } from "@lucide/astro";
 
 interface Props {
-  /** Left out: the `scope` forms' submissions (the shared inbox), with the form's name on each. */
+  /** Left out: the `scope` forms' submissions (the shared inbox), with a form list in the sidebar. */
   form?: Form;
   scope?: string[];
-  status: "inbox" | "spam";
 }
-const { form, scope = [], status } = Astro.props;
+const { form, scope = [] } = Astro.props;
 const params = Astro.url.searchParams;
+const VIEWS = [
+  { id: "inbox", label: "All submissions", icon: InboxIcon, color: "text-sky-500" },
+  { id: "unread", label: "Unread", icon: Mail, color: "text-amber-500" },
+  { id: "starred", label: "Starred", icon: Star, color: "text-yellow-500" },
+  { id: "spam", label: "Spam", icon: ShieldX, color: "text-orange-500" },
+] as const;
+// `tab=spam` and `show=` are the old addresses (emails and bookmarks still use them).
+const asked = params.get("view") ?? (params.get("tab") === "spam" ? "spam" : params.get("show"));
+const view: View = VIEWS.some((v) => v.id === asked) ? (asked as View) : "inbox";
 const q = (params.get("q") ?? "").slice(0, 200);
 const page = Math.max(1, Number(params.get("page")) || 1);
-const show = status === "inbox" && ["unread", "starred"].includes(params.get("show") ?? "") ? (params.get("show") as "unread" | "starred") : "all";
 const days = [7, 30, 90].includes(Number(params.get("days"))) ? Number(params.get("days")) : 0;
 const order = params.get("order") === "old" ? "old" : "new";
 const perPage = PER_PAGE.includes(Number(params.get("per"))) ? Number(params.get("per")) : PAGE;
-const view: View = status === "spam" ? "spam" : show === "all" ? "inbox" : show;
-const where = form?.key ?? scope;
+const all = form ? [] : forms().filter((f) => scope.includes(f.key));
+const only = form ? null : (all.find((f) => f.key === params.get("form")) ?? null);
+const where = form?.key ?? (only ? only.key : scope);
 const { total, items } = submissions(where, view, q, page, { perPage, days, order });
 const n = counts(where);
-const names = form ? null : new Map(forms().map((f) => [f.key, f.name]));
+const names = new Map(all.map((f) => [f.key, f.name]));
+const formCounts = new Map(all.map((f) => [f.key, counts(f.key)]));
 const pages = Math.max(1, Math.ceil(total / perPage));
 const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(s * 1000);
+const fields = (s: Submission) => Object.entries(s.data).filter(([, v]) => [v].flat().join("").trim());
+const who = (s: Submission) => s.replyTo || String([fields(s).find(([k]) => /name/i.test(k))?.[1] ?? ""].flat()[0] ?? "");
 const preview = (s: Submission) =>
-  Object.entries(s.data)
-    .filter(([, v]) => [v].flat().join("").trim())
+  fields(s)
+    .filter(([k]) => !/^(e-?mail|name)$/i.test(k))
     .slice(0, 3)
     .map(([k, v]) => `${k}: ${[v].flat().join(", ")}`)
     .join(" · ")
     .slice(0, 160) || "(empty)";
 const link = (over: Record<string, string | number>) => {
-  const p = new URLSearchParams({ tab: status, ...(show !== "all" && { show }), ...(q && { q }), ...(days && { days: String(days) }), ...(order === "old" && { order }), ...(perPage !== PAGE && { per: String(perPage) }) });
+  const p = new URLSearchParams({ tab: "inbox", ...(view !== "inbox" && { view }), ...(only && { form: only.key }), ...(q && { q }), ...(days && { days: String(days) }), ...(order === "old" && { order }), ...(perPage !== PAGE && { per: String(perPage) }) });
   for (const [k, v] of Object.entries(over)) v === "" ? p.delete(k) : p.set(k, String(v));
   return `?${p}`;
 };
-const chip = (active: boolean) => `rounded-full border px-3 py-1 text-xs ${active ? "bg-foreground text-background" : "hover:bg-muted"}`;
-const select = inputClass + " w-auto";
+const select = inputClass.replace("w-full", "w-auto") + " h-8";
+const current = VIEWS.find((v) => v.id === view)!;
+const item = "hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent flex shrink-0 items-center gap-3 rounded-lg px-2 py-2";
 ---
 
-<div class="flex flex-col gap-4">
-  {
-    status === "inbox" && (
-      <nav class="flex flex-wrap gap-2" aria-label="Show">
-        <a class={chip(show === "all")} href={link({ show: "", page: "" })}>All ({n.inbox})</a>
-        <a class={chip(show === "unread")} href={link({ show: "unread", page: "" })}>Unread ({n.unread})</a>
-        <a class={chip(show === "starred")} href={link({ show: "starred", page: "" })}>Starred ({n.starred})</a>
-      </nav>
-    )
-  }
-  <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-    <form class="flex flex-wrap gap-2" method="get">
-      <input type="hidden" name="tab" value={status} />
-      {show !== "all" && <input type="hidden" name="show" value={show} />}
-      <input class={inputClass + " w-56"} name="q" value={q} placeholder="Search submissions" aria-label="Search submissions" />
-      <select class={select} name="days" aria-label="Date range">
-        {[[0, "All time"], [7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => <option value={v} selected={v === days}>{l}</option>)}
-      </select>
-      <select class={select} name="order" aria-label="Order">
-        <option value="new" selected={order === "new"}>Newest first</option>
-        <option value="old" selected={order === "old"}>Oldest first</option>
-      </select>
-      <select class={select} name="per" aria-label="Per page">
-        {PER_PAGE.map((p) => <option value={p} selected={p === perPage}>{p} / page</option>)}
-      </select>
-      <button class={button("outline")}>Apply</button>
-    </form>
-    {form && <a class={button("outline")} href={`/api/forms/${form.key}/export?status=${status}`} download>Export CSV</a>}
-  </div>
-  {status === "spam" && <p class="text-muted-foreground text-sm">Spam is kept, but nothing is emailed or sent on for it. Open one to see why it was flagged.</p>}
-  {
-    items.length === 0 ? (
-      <p class="text-muted-foreground rounded-lg border p-6 text-center text-sm">
-        {q || days ? "Nothing matches." : status === "spam" ? "No spam." : show === "unread" ? "All read." : show === "starred" ? "Nothing starred yet: star a submission to keep it here." : "No submissions yet. The Setup tab shows how to connect your form."}
-      </p>
-    ) : (
-      <div class="flex flex-col gap-2" data-bulk-root>
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-          <label class="flex items-center gap-2 px-1">
-            <input type="checkbox" class="size-4" data-all aria-label="Select all on this page" /> <span class="text-muted-foreground" data-count>Select</span>
-          </label>
-          <span class="flex flex-wrap gap-2" data-bulk hidden>
-            <button class={button("outline", "sm")} data-bulk-action="read">Mark read</button>
-            <button class={button("outline", "sm")} data-bulk-action="unread">Mark unread</button>
-            <button class={button("outline", "sm")} data-bulk-action="star">Star</button>
-            <button class={button("outline", "sm")} data-bulk-action="unstar">Unstar</button>
-            <button class={button("outline", "sm")} data-bulk-action={status === "spam" ? "inbox" : "spam"}>{status === "spam" ? "Not spam" : "Spam"}</button>
-            <button class={button("destructive", "sm")} data-bulk-action="delete">Delete</button>
+<div class="flex min-h-[560px] min-w-0 flex-col overflow-hidden rounded-xl border md:flex-row">
+  <aside class="bg-sidebar flex shrink-0 flex-col border-b md:w-64 md:border-r md:border-b-0">
+    <div class="flex h-14 shrink-0 items-center border-b px-4 font-semibold">Submissions</div>
+    <nav class="flex gap-1 overflow-x-auto p-2 md:flex-col" aria-label="View">
+      {
+        VIEWS.map((v) => (
+          <a href={link({ view: v.id === "inbox" ? "" : v.id, page: "" })} class={item} aria-current={view === v.id ? "page" : undefined}>
+            <span class={`bg-background flex size-8 shrink-0 items-center justify-center rounded-lg border ${v.color}`}>
+              <v.icon class="size-4" />
+            </span>
+            <span class="flex-1 text-sm font-medium">{v.label}</span>
+            {v.id === "unread" && n.unread > 0 ? (
+              <span class="rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] leading-none font-semibold text-white tabular-nums">{n.unread}</span>
+            ) : (
+              <span class="text-muted-foreground text-xs tabular-nums">{n[v.id]}</span>
+            )}
+          </a>
+        ))
+      }
+    </nav>
+    {
+      !form && (
+        <div class="flex min-h-0 flex-col gap-1 border-t p-2" role="group" aria-label="Forms">
+          <span class="text-muted-foreground flex items-center gap-1.5 px-2 pt-1 pb-1 text-xs font-medium">
+            <FileText class="size-3.5" /> Forms ({all.length})
           </span>
-        </div>
-        <ul class="divide-y rounded-lg border">
-          {items.map((s) => (
-            <li class="hover:bg-muted flex items-center gap-3 pl-4 text-sm">
-              <input type="checkbox" class="size-4 shrink-0" value={s.id} data-pick aria-label="Select" />
-              <a href={`/forms/${s.formKey}/${s.id}`} class="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pr-4">
-                <span class:list={["min-w-0 truncate", !s.read && status === "inbox" && "font-semibold"]}>
-                  {s.starred && <span class="mr-1 text-amber-500" aria-label="Starred">★</span>}
-                  {names && <span class="text-muted-foreground mr-2 text-xs font-normal">{names.get(s.formKey)}</span>}
-                  {preview(s)}
-                </span>
-                <span class="text-muted-foreground flex shrink-0 items-center gap-2 text-xs">
-                  {s.files.length > 0 && <span>{s.files.length} file{s.files.length > 1 ? "s" : ""}</span>}
-                  {status === "spam" && <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">score {s.score}</span>}
-                  {date(s.createdAt)}
-                </span>
-              </a>
+          <ul class="flex max-h-[28rem] flex-col gap-0.5 overflow-y-auto text-sm">
+            <li>
+              <a href={link({ form: "", page: "" })} class:list={["hover:bg-sidebar-accent block rounded-md px-2 py-1.5", !only && "bg-sidebar-accent font-medium"]}>All forms</a>
             </li>
-          ))}
-        </ul>
-        <p role="alert" class="text-destructive text-sm empty:hidden" data-bulk-error></p>
+            {all.map((f) => (
+              <li>
+                <a href={link({ form: f.key, page: "" })} class:list={["hover:bg-sidebar-accent block rounded-md px-2 py-1.5", only?.key === f.key && "bg-sidebar-accent font-medium"]}>
+                  <span class="block truncate">{f.name}</span>
+                  <span class="text-muted-foreground text-xs">
+                    {formCounts.get(f.key)!.inbox} submission{formCounts.get(f.key)!.inbox === 1 ? "" : "s"}
+                    {formCounts.get(f.key)!.unread ? ` · ${formCounts.get(f.key)!.unread} new` : ""}
+                  </span>
+                </a>
+              </li>
+            ))}
+            {!all.length && <li class="text-muted-foreground px-2 py-1.5 text-xs">No forms in this workspace yet.</li>}
+          </ul>
+        </div>
+      )
+    }
+  </aside>
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    <form method="get" data-filters>
+      <input type="hidden" name="tab" value="inbox" />
+      {view !== "inbox" && <input type="hidden" name="view" value={view} />}
+      {only && <input type="hidden" name="form" value={only.key} />}
+      <header class="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b px-6 py-2">
+        <h2 class="flex min-w-0 items-baseline gap-2 text-lg font-semibold">
+          {current.label}
+          {only && <span class="text-muted-foreground truncate text-xs font-normal">{only.name}</span>}
+          <span class="text-muted-foreground text-xs font-normal tabular-nums">{total}</span>
+        </h2>
+        <label class="relative ml-auto w-full max-w-xs">
+          <Search class="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <input class={inputClass + " h-9 pl-8"} name="q" value={q} placeholder="Search submissions" aria-label="Search submissions" />
+        </label>
+      </header>
+      <div class="flex flex-wrap items-center gap-2 border-b px-6 py-2">
+        <select class={select} name="days" aria-label="Date range">
+          {[[0, "All time"], [7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => <option value={v} selected={v === days}>{l}</option>)}
+        </select>
+        <select class={select} name="order" aria-label="Order">
+          <option value="new" selected={order === "new"}>Newest first</option>
+          <option value="old" selected={order === "old"}>Oldest first</option>
+        </select>
+        <select class={select} name="per" aria-label="Per page">
+          {PER_PAGE.map((p) => <option value={p} selected={p === perPage}>{p} per page</option>)}
+        </select>
+        <noscript><button class={button("outline", "sm")}>Apply</button></noscript>
+        {form && <a class={button("outline", "sm") + " ml-auto"} href={`/api/forms/${form.key}/export?status=${view === "spam" ? "spam" : "inbox"}`} download><Download /> Export CSV</a>}
       </div>
-    )
-  }
-  {
-    pages > 1 && (
-      <nav class="flex items-center justify-between text-sm" aria-label="Pages">
-        {page > 1 ? <a class={button("outline", "sm")} href={link({ page: page - 1 })}>Previous</a> : <span />}
-        <span class="text-muted-foreground">Page {page} of {pages} · {total} total</span>
-        {page < pages ? <a class={button("outline", "sm")} href={link({ page: page + 1 })}>Next</a> : <span />}
-      </nav>
-    )
-  }
+    </form>
+
+    <div class="flex min-w-0 flex-col gap-3 p-6" data-bulk-root>
+      {view === "spam" && <p class="text-muted-foreground text-sm">Spam is kept, but nothing is emailed or sent on for it. Open one to see why it was flagged.</p>}
+      <div class="bg-muted/50 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" data-bulk hidden>
+        <span class="mr-auto" data-count></span>
+        <button class={button("outline", "sm")} data-bulk-action="read">Mark read</button>
+        <button class={button("outline", "sm")} data-bulk-action="unread">Mark unread</button>
+        <button class={button("outline", "sm")} data-bulk-action="star"><Star /> Star</button>
+        <button class={button("outline", "sm")} data-bulk-action="unstar">Unstar</button>
+        <button class={button("outline", "sm")} data-bulk-action={view === "spam" ? "inbox" : "spam"}><ShieldX /> {view === "spam" ? "Not spam" : "Spam"}</button>
+        <button class={button("destructive", "sm")} data-bulk-action="delete">Delete</button>
+      </div>
+      <p role="alert" class="text-destructive text-sm empty:hidden" data-bulk-error></p>
+      <div class="overflow-x-auto rounded-lg border">
+        <table class="w-full text-sm">
+          <thead class="text-muted-foreground border-b text-left text-xs">
+            <tr>
+              <th class="w-8 px-3 py-2"><input type="checkbox" class="size-4" data-all aria-label="Select all on this page" disabled={!items.length} /></th>
+              <th class="px-3 py-2 font-medium">Submission</th>
+              {!form && <th class="px-3 py-2 font-medium">Form</th>}
+              <th class="px-3 py-2 font-medium">{view === "spam" ? "Score" : "Files"}</th>
+              <th class="px-3 py-2 text-right font-medium">Received</th>
+              <th class="w-8"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {
+              !items.length && (
+                <tr>
+                  <td colspan={form ? 5 : 6} class="text-muted-foreground p-6 text-center">
+                    {q || days ? "Nothing matches." : view === "spam" ? "No spam." : view === "unread" ? "All read." : view === "starred" ? "Nothing starred yet: star a submission to keep it here." : "No submissions yet. The Setup tab shows how to connect your form."}
+                  </td>
+                </tr>
+              )
+            }
+            {items.map((s) => (
+              <tr class="hover:bg-muted/50 align-top">
+                <td class="px-3 py-3"><input type="checkbox" class="size-4" value={s.id} data-pick aria-label="Select" /></td>
+                <td class="max-w-md px-3 py-3">
+                  <a href={`/forms/${s.formKey}/${s.id}`} class="block min-w-0">
+                    <span class:list={["flex items-center gap-1.5 text-xs", !s.read && view !== "spam" ? "font-semibold" : "text-muted-foreground"]}>
+                      {!s.read && view !== "spam" && <span class="size-1.5 shrink-0 rounded-full bg-sky-500" aria-label="Unread" />}
+                      {s.starred && <Star class="size-3.5 shrink-0 fill-yellow-500 text-yellow-500" aria-label="Starred" />}
+                      <span class="truncate">{who(s) || "No name or email"}</span>
+                    </span>
+                    <span class:list={["line-clamp-2 break-words", !s.read && view !== "spam" && "font-medium"]}>{preview(s)}</span>
+                  </a>
+                </td>
+                {!form && <td class="text-muted-foreground px-3 py-3 text-xs">{names.get(s.formKey)}</td>}
+                <td class="text-muted-foreground px-3 py-3 text-xs">
+                  {view === "spam" ? (
+                    <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">{s.score}</span>
+                  ) : s.files.length ? (
+                    <span class="inline-flex items-center gap-1"><Paperclip class="size-3.5" />{s.files.length}</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td class="text-muted-foreground px-3 py-3 text-right text-xs whitespace-nowrap">{date(s.createdAt)}</td>
+                <td class="py-3 pr-2"><a href={`/forms/${s.formKey}/${s.id}`} class={button("ghost", "icon")} aria-label="Open"><ChevronRight /></a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {
+        pages > 1 && (
+          <nav class="flex items-center justify-between text-sm" aria-label="Pages">
+            {page > 1 ? <a class={button("outline", "sm")} href={link({ page: page - 1 })}>Previous</a> : <span />}
+            <span class="text-muted-foreground">Page {page} of {pages} · {total} total</span>
+            {page < pages ? <a class={button("outline", "sm")} href={link({ page: page + 1 })}>Next</a> : <span />}
+          </nav>
+        )
+      }
+    </div>
+  </div>
 </div>
 
 <script>
   import { post } from "@/lib/post";
-  const root = document.querySelector<HTMLElement>("[data-bulk-root]");
-  if (root) {
-    const picks = [...root.querySelectorAll<HTMLInputElement>("[data-pick]")];
-    const all = root.querySelector<HTMLInputElement>("[data-all]")!;
-    const bar = root.querySelector<HTMLElement>("[data-bulk]")!;
-    const count = root.querySelector<HTMLElement>("[data-count]")!;
-    const chosen = () => picks.filter((p) => p.checked).map((p) => p.value);
-    const sync = () => {
-      const n = chosen().length;
-      bar.hidden = !n;
-      count.textContent = n ? `${n} selected` : "Select";
-      all.checked = n === picks.length;
-      all.indeterminate = n > 0 && n < picks.length;
-    };
-    all.addEventListener("change", () => (picks.forEach((p) => (p.checked = all.checked)), sync()));
-    picks.forEach((p) => p.addEventListener("change", sync));
-    root.querySelectorAll<HTMLButtonElement>("[data-bulk-action]").forEach((b) =>
-      b.addEventListener("click", async () => {
-        const ids = chosen();
-        if (b.dataset.bulkAction === "delete" && !confirm(`Delete ${ids.length} submission${ids.length > 1 ? "s" : ""} and their files?`)) return;
-        try {
-          await post("/api/submissions", { action: b.dataset.bulkAction, ids });
-          location.reload();
-        } catch (e: any) {
-          root.querySelector("[data-bulk-error]")!.textContent = e.message;
-        }
-      }),
-    );
-  }
+  const filters = document.querySelector<HTMLFormElement>("[data-filters]")!;
+  filters.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => filters.requestSubmit()));
+  const root = document.querySelector<HTMLElement>("[data-bulk-root]")!;
+  const picks = [...root.querySelectorAll<HTMLInputElement>("[data-pick]")];
+  const all = root.querySelector<HTMLInputElement>("[data-all]")!;
+  const bar = root.querySelector<HTMLElement>("[data-bulk]")!;
+  const count = root.querySelector<HTMLElement>("[data-count]")!;
+  const chosen = () => picks.filter((p) => p.checked).map((p) => p.value);
+  const sync = () => {
+    const n = chosen().length;
+    bar.hidden = !n;
+    count.textContent = `${n} selected`;
+    all.checked = n > 0 && n === picks.length;
+    all.indeterminate = n > 0 && n < picks.length;
+  };
+  all.addEventListener("change", () => (picks.forEach((p) => (p.checked = all.checked)), sync()));
+  picks.forEach((p) => p.addEventListener("change", sync));
+  root.querySelectorAll<HTMLButtonElement>("[data-bulk-action]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const ids = chosen();
+      if (b.dataset.bulkAction === "delete" && !confirm(`Delete ${ids.length} submission${ids.length > 1 ? "s" : ""} and their files?`)) return;
+      try {
+        await post("/api/submissions", { action: b.dataset.bulkAction, ids });
+        location.reload();
+      } catch (e: any) {
+        root.querySelector("[data-bulk-error]")!.textContent = e.message;
+      }
+    }),
+  );
 </script>

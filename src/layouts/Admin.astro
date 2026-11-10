@@ -1,7 +1,8 @@
 ---
 import Base from "./Base.astro";
 import { Button } from "@/components/ui/button";
-import { Inbox } from "@lucide/astro";
+import { tabList, tabTrigger } from "@/components/ui/island";
+import { FolderKanban, Gauge, Inbox, KeyRound, LayoutList, UserSearch, Users } from "@lucide/astro";
 import { workspaces } from "@/plugins/forms/lib/forms";
 
 interface Props {
@@ -10,6 +11,17 @@ interface Props {
 const { title } = Astro.props;
 const { admin, workspace } = Astro.locals;
 const all = workspaces();
+const path = Astro.url.pathname;
+const nav = [
+  ["/", LayoutList, "Forms"],
+  ["/inbox", Inbox, "Inbox"],
+  ["/workspaces", FolderKanban, "Workspaces"],
+  ["/usage", Gauge, "Usage"],
+  ["/api-keys", KeyRound, "API"],
+  ["/data-requests", UserSearch, "Data requests"],
+  ["/team", Users, "Team"],
+] as const;
+const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/forms") : path.startsWith(href));
 ---
 
 <Base title={title}>
@@ -22,19 +34,22 @@ const all = workspaces();
         </select>
       </div>
       <div class="flex flex-wrap items-center gap-3 text-sm">
-        <a href="/inbox" class="text-muted-foreground hover:text-foreground">Inbox</a>
-        <a href="/workspaces" class="text-muted-foreground hover:text-foreground">Workspaces</a>
-        <a href="/usage" class="text-muted-foreground hover:text-foreground">Usage</a>
-        <a href="/api-keys" class="text-muted-foreground hover:text-foreground">API</a>
-        <a href="/data-requests" class="text-muted-foreground hover:text-foreground">Data requests</a>
-        <a href="/team" class="text-muted-foreground hover:text-foreground">Team</a>
         <span class="text-muted-foreground hidden sm:inline">{admin.email}</span>
         <Button size="sm" variant="outline" data-sign-out>Sign out</Button>
       </div>
     </div>
   </header>
-  <main class="mx-auto max-w-6xl px-4 py-6">
-    <slot />
+  <main class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6">
+    <nav class={tabList + " max-w-full overflow-x-auto"} aria-label="Sections">
+      {
+        nav.map(([href, Icon, label]) => (
+          <a href={href} class={tabTrigger} data-state={active(href) ? "active" : undefined} aria-current={active(href) ? "page" : undefined}>
+            <Icon /> {label}
+          </a>
+        ))
+      }
+    </nav>
+    <div><slot /></div>
   </main>
 </Base>
 

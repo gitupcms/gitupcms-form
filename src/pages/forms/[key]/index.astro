@@ -12,15 +12,15 @@ import { formByKey } from "@/plugins/forms/lib/forms";
 
 const form = formByKey(Astro.params.key ?? "");
 if (!form) return Astro.redirect("/");
-const TABS = ["inbox", "spam", "analytics", "setup", "delivery", "rules", "security", "settings"] as const;
+const TABS = ["inbox", "analytics", "setup", "delivery", "rules", "security", "settings"] as const;
 const asked = Astro.url.searchParams.get("tab") as (typeof TABS)[number];
-const tab = TABS.includes(asked) ? asked : "inbox";
+const tab = TABS.includes(asked) ? asked : "inbox"; // "spam" (old links) is a view of the inbox
 ---
 
 <Admin title={form.name}>
   <div class="flex flex-col gap-6" data-key={form.key}>
     <FormHeader form={form} tab={tab} />
-    {(tab === "inbox" || tab === "spam") && <Inbox form={form} status={tab} />}
+    {tab === "inbox" && <Inbox form={form} />}
     {tab === "analytics" && <Analytics form={form} />}
     {tab === "setup" && <Setup form={form} />}
     {tab === "delivery" && <Delivery form={form} />}
