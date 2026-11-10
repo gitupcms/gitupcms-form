@@ -103,6 +103,22 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 - `legal/`: güvenlik, gizlilik (KVKK aydınlatma dahil), DPA (alt işleyenler Ek 3), kullanım şartları taslakları.
   Cloud açılmadan önce: şirket bilgileri, AB bölgesi (öneri eu-central-1), alt işleyen listesi ve avukat kontrolü.
 
+## 4c. Canlı testte açık kalanlar (2026-11-10)
+
+Kanallar gerçek hesaplarla test edildi (Telegram, Notion, Zapier, Mailchimp; :4390'daki gerçek formdan e-posta, Zapier
+ve Mailchimp HTTP 200). Yapılmayanlar:
+
+- **Mailchimp onayı:** onay e-postaları geldi, ama bağlantı Mailchimp'in CAPTCHA sayfasına gidiyor; CAPTCHA'yı kullanıcı
+  geçmeli. +form ve +gitupcms adresleri "test" kitlesinde hâlâ pending.
+- **Mailchimp gönderen alan adı:** kitle `fuatcangenc@gmail.com` adresinden gönderiyor, hesapta doğrulanmış domain yok,
+  bu yüzden onay e-postaları spam'e düştü. Yapılacak: kendi domainini Account → Domains'te doğrula, DNS'e CNAME/TXT ekle,
+  kitlenin gönderenini o domaindeki bir adres yap. (Hangi domain? Kullanıcı söyleyecek.)
+- **Zapier e-posta adımı:** Zap (386253681) taslak; e-posta adımı yalnızca adım testinde çalıştı. Gerçek gönderimlerde
+  çalışması için Zap'in yayınlanması gerekiyor (Pro plan).
+- **Anahtar temizliği:** Mailchimp'teki "Gitupcms Forms 4390" anahtarı kayboldu ve kullanılmıyor, iptal edilmeli.
+  "Gitupcms Forms localhost" anahtarının değeri bir kez araç çıktısına düştü, test bitince yenilenmeli. Daha önce sohbete
+  yapıştırılan Slack, Notion, Airtable ve Telegram tokenları da yenilenmeli.
+
 ## 5. Yapmayacaklarımız
 
 - Görsel form builder ve embed: formu site ya da AI ajanı yazar (kullanıcı kararı, 2026-11-10).
