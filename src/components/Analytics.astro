@@ -1,0 +1,124 @@
+---
+import { analytics, RANGES } from "@/plugins/forms/lib/stats";
+import type { Form } from "@/plugins/forms/lib/forms";
+
+interface Props {
+  form: Form;
+}
+const { form } = Astro.props;
+const days = RANGES.includes(Number(Astro.url.searchParams.get("days"))) ? Number(Astro.url.searchParams.get("days")) : 30;
+const a = analytics(form.key, days);
+const change = a.lastMonth ? Math.round(((a.month - a.lastMonth) / a.lastMonth) * 100) : null;
+const tiles = [
+  ["Submissions", a.total, "all time"],
+  ["This month", a.month, change === null ? "no data for last month" : `${change >= 0 ? "+" : ""}${change}% vs last month`],
+  ["Last 7 days", a.week, "including today"],
+  ["Spam blocked", a.spam, "all time"],
+] as const;
+
+// Stacked bars: submissions at the baseline, spam above them, a 2px gap between; one hover target per day.
+const max = Math.max(1, ...a.series.map((d) => d.inbox + d.spam));
+const step = Math.max(1, Math.ceil(max / 4));
+const top = step * 4; // whole-number ticks: 0, step, 2·step…
+const W = 24, H = 160, BAR = 16;
+const y = (n: number) => (n / top) * H;
+const label = (day: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(day));
+const every = Math.ceil(days / 8);
+const country = new Intl.DisplayNames(["en"], { type: "region" });
+const lists: [string, [string, number][]][] = [
+  ["Where submissions come from", a.sources.map((s) => [s.name || "No site (scripts, API, tests)", s.n])],
+  ["Country", a.countries.map((c) => [c.name ? (country.of(c.name) ?? c.name) : "Unknown", c.n])],
+];
+---
+
+<div class="flex flex-col gap-6">
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {
+      tiles.map(([title, n, note]) => (
+        <div class="flex flex-col gap-1 rounded-lg border p-4">
+          <span class="text-muted-foreground text-xs">{title}</span>
+          <span class="text-2xl font-medium tabular-nums">{n.toLocaleString("en")}</span>
+          <span class="text-muted-foreground text-xs">{note}</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <section class="flex flex-col gap-3 rounded-lg border p-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-medium">Submissions per day</h2>
+        <p class="text-muted-foreground text-xs">Spam shown on top, apart. Days are UTC.</p>
+      </div>
+      <nav class="flex gap-1" aria-label="Range">
+        {RANGES.map((r) => <a href={`?tab=analytics&days=${r}`} class={`rounded-full border px-3 py-1 text-xs ${r === days ? "bg-foreground text-background" : "hover:bg-muted"}`}>{r} days</a>)}
+      </nav>
+    </div>
+    <div class="text-muted-foreground flex gap-4 text-xs">
+      <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-[#2a78d6] dark:bg-[#3987e5]"></span>Submissions</span>
+      <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-[#eb6834] dark:bg-[#d95926]"></span>Spam</span>
+    </div>
+    <div class="flex gap-2">
+      <div class="text-muted-foreground flex h-40 flex-col justify-between text-right text-[10px] tabular-nums">
+        {[4, 3, 2, 1, 0].map((i) => <span class="-my-1.5">{(step * i).toLocaleString("en")}</span>)}
+      </div>
+      <div class="min-w-0 flex-1">
+        <svg viewBox={`0 0 ${days * W} ${H}`} preserveAspectRatio="none" class="h-40 w-full overflow-visible" role="img" aria-label={`Submissions per day for the last ${days} days`}>
+          {[1, 2, 3, 4].map((i) => <line x1="0" x2={days * W} y1={H - (H / 4) * i} y2={H - (H / 4) * i} class="stroke-border" stroke-width="1" vector-effect="non-scaling-stroke" />)}
+          {
+            a.series.map((d, i) => {
+              const x = i * W + (W - BAR) / 2;
+              const hi = y(d.inbox);
+              const hs = y(d.spam);
+              return (
+                <g class="group">
+                  {d.inbox > 0 && <rect x={x} y={H - hi} width={BAR} height={hi} rx="2" class="fill-[#2a78d6] dark:fill-[#3987e5]" />}
+                  {d.spam > 0 && <rect x={x} y={H - hi - hs - (d.inbox ? 2 : 0)} width={BAR} height={hs} rx="2" class="fill-[#eb6834] dark:fill-[#d95926]" />}
+                  <rect x={i * W} y="0" width={W} height={H} class="fill-transparent group-hover:fill-current group-hover:opacity-5">
+                    <title>{`${label(d.day)}: ${d.inbox} submission${d.inbox === 1 ? "" : "s"}, ${d.spam} spam`}</title>
+                  </rect>
+                </g>
+              );
+            })
+          }
+        </svg>
+        <div class="text-muted-foreground relative mt-1 h-4 text-[10px] whitespace-nowrap">
+          {a.series.map((d, i) => i % every === (days - 1) % every && <span class="absolute -translate-x-1/2" style={`left:${((i + 0.5) / days) * 100}%`}>{label(d.day)}</span>)}
+        </div>
+      </div>
+    </div>
+    <details class="text-sm">
+      <summary class="text-muted-foreground cursor-pointer text-xs">Show as a table</summary>
+      <table class="mt-2 w-full text-xs tabular-nums">
+        <thead class="text-muted-foreground"><tr><th class="py-1 text-left font-normal">Day</th><th class="text-right font-normal">Submissions</th><th class="text-right font-normal">Spam</th></tr></thead>
+        <tbody class="divide-y">{a.series.toReversed().map((d) => <tr><td class="py-1">{label(d.day)}</td><td class="text-right">{d.inbox}</td><td class="text-right">{d.spam}</td></tr>)}</tbody>
+      </table>
+    </details>
+  </section>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    {
+      lists.map(([title, rows]) => (
+        <section class="flex flex-col gap-2 rounded-lg border p-4">
+          <h2 class="text-sm font-medium">{title}</h2>
+          <p class="text-muted-foreground text-xs">Last {days} days, spam left out.</p>
+          {rows.length ? (
+            <ul class="flex flex-col gap-2 text-sm">
+              {rows.map(([name, n]) => (
+                <li class="flex flex-col gap-1">
+                  <span class="flex justify-between gap-3"><span class="truncate">{name}</span><span class="tabular-nums">{n}</span></span>
+                  <span class="bg-muted h-1.5 rounded-full"><span class="block h-full rounded-full bg-[#2a78d6] dark:bg-[#3987e5]" style={`width:${(n / rows[0][1]) * 100}%`} /></span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="text-muted-foreground text-sm">No submissions in this range.</p>
+          )}
+        </section>
+      ))
+    }
+  </div>
+  <p class="text-muted-foreground text-xs">
+    Counted when a submission arrives, so deleting submissions does not change these numbers. Country needs a proxy that sends it (Cloudflare, Vercel) and TRUST_PROXY=1; IP addresses are never stored.
+  </p>
+</div>

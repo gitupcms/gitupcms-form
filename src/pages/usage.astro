@@ -1,0 +1,53 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import { LIMITS, branding } from "@/lib/limits";
+import { forms } from "@/plugins/forms/lib/forms";
+import { monthByForm, monthUsage } from "@/plugins/forms/lib/stats";
+
+const used = monthUsage();
+const formCount = forms().length;
+const perForm = monthByForm();
+const month = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date());
+const bars = [
+  ["Submissions this month", used, LIMITS.submissions, "MONTHLY_SUBMISSION_LIMIT"],
+  ["Forms", formCount, LIMITS.forms, "MAX_FORMS"],
+] as const;
+---
+
+<Admin title="Usage">
+  <div class="flex flex-col gap-6">
+    <div>
+      <h1 class="text-lg font-medium tracking-tight">Usage</h1>
+      <p class="text-muted-foreground text-sm">{month} (UTC), every workspace. Spam does not count.</p>
+    </div>
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        bars.map(([title, n, limit, name]) => (
+          <div class="flex flex-col gap-2 rounded-lg border p-4">
+            <span class="text-muted-foreground text-xs">{title}</span>
+            <span class="text-2xl font-medium tabular-nums">
+              {n.toLocaleString("en")}
+              {limit > 0 && <span class="text-muted-foreground text-base font-normal"> / {limit.toLocaleString("en")}</span>}
+            </span>
+            {limit > 0 ? (
+              <span class="bg-muted h-1.5 rounded-full">
+                <span class:list={["block h-full rounded-full", n >= limit ? "bg-destructive" : "bg-foreground"]} style={`width:${Math.min(100, (n / limit) * 100)}%`} />
+              </span>
+            ) : (
+              <span class="text-muted-foreground text-xs">No limit (set {name} to add one)</span>
+            )}
+            {limit > 0 && n >= limit && <span class="text-destructive text-xs">Limit reached: {name === "MAX_FORMS" ? "new forms cannot be added." : "new posts are refused until next month."}</span>}
+          </div>
+        ))
+      }
+    </div>
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-medium">Per form this month</h2>
+      <ul class="divide-y rounded-lg border text-sm">
+        {perForm.map((f) => <li class="flex justify-between gap-3 px-4 py-2"><a href={`/forms/${f.key}?tab=analytics`} class="truncate hover:underline">{f.name}</a><span class="tabular-nums">{f.n}</span></li>)}
+        {perForm.length === 0 && <li class="text-muted-foreground px-4 py-3">No forms yet.</li>}
+      </ul>
+    </section>
+    <p class="text-muted-foreground text-xs">Branding on thank-you pages and emails: {branding ? "on (BRANDING=1)" : "off"}.</p>
+  </div>
+</Admin>

@@ -3,6 +3,7 @@ import { button, sectionLabel } from "@/components/ui/island";
 import { appOrigin } from "@/lib/admin";
 import type { Form } from "@/plugins/forms/lib/forms";
 import { widgetSnippet } from "@/plugins/forms/lib/captcha";
+import { templates } from "@/plugins/forms/lib/templates";
 
 interface Props {
   form: Form;
@@ -34,6 +35,92 @@ const ajax = `<script>
   });
 </script>`;
 
+const react = `"use client"; // Next.js App Router; leave out in plain React
+import { useState } from "react";
+
+export function ContactForm() {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | string>("idle");
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setState("sending");
+    const res = await fetch("${endpoint}", { method: "POST", body: new FormData(e.currentTarget), headers: { Accept: "application/json" } });
+    const json = await res.json();
+    setState(json.ok ? "sent" : json.error);
+  }
+  if (state === "sent") return <p>Thanks, we got your message.</p>;
+  return (
+    <form onSubmit={onSubmit}>
+      <input name="name" placeholder="Name" required />
+      <input name="email" type="email" placeholder="Email" required />
+      <textarea name="message" placeholder="Message" required />
+      <input name="_gotcha" style={{ display: "none" }} tabIndex={-1} autoComplete="off" />
+      <button disabled={state === "sending"}>Send</button>
+      {state !== "idle" && state !== "sending" && <p>{state}</p>}
+    </form>
+  );
+}`;
+
+const vue = `<script setup>
+import { ref } from "vue";
+const state = ref("idle");
+async function submit(e) {
+  state.value = "sending";
+  const res = await fetch("${endpoint}", { method: "POST", body: new FormData(e.target), headers: { Accept: "application/json" } });
+  const json = await res.json();
+  state.value = json.ok ? "sent" : json.error;
+}
+</script>
+
+<template>
+  <p v-if="state === 'sent'">Thanks, we got your message.</p>
+  <form v-else @submit.prevent="submit">
+    <input name="name" placeholder="Name" required />
+    <input name="email" type="email" placeholder="Email" required />
+    <textarea name="message" placeholder="Message" required />
+    <input name="_gotcha" style="display: none" tabindex="-1" autocomplete="off" />
+    <button :disabled="state === 'sending'">Send</button>
+    <p v-if="!['idle', 'sending'].includes(state)">{{ state }}</p>
+  </form>
+</template>`;
+
+const svelte = `<script>
+  let state = $state("idle");
+  async function submit(e) {
+    e.preventDefault();
+    state = "sending";
+    const res = await fetch("${endpoint}", { method: "POST", body: new FormData(e.target), headers: { Accept: "application/json" } });
+    const json = await res.json();
+    state = json.ok ? "sent" : json.error;
+  }
+</script>
+
+{#if state === "sent"}
+  <p>Thanks, we got your message.</p>
+{:else}
+  <form onsubmit={submit}>
+    <input name="name" placeholder="Name" required />
+    <input name="email" type="email" placeholder="Email" required />
+    <textarea name="message" placeholder="Message" required></textarea>
+    <input name="_gotcha" style="display:none" tabindex="-1" autocomplete="off" />
+    <button disabled={state === "sending"}>Send</button>
+    {#if !["idle", "sending"].includes(state)}<p>{state}</p>{/if}
+  </form>
+{/if}`;
+
+const webflow = `1. Select the Form Block (not the Form Wrapper) and open its settings (the gear icon).
+2. Action: ${endpoint}
+3. Method: POST
+4. Give every input a Name in its settings; those become the field names here.
+5. Publish. Webflow's own form handling is skipped; its success and error messages are not shown,
+   so add <input type="hidden" name="_redirect" value="/thanks"> in an Embed inside the form for a thank-you page.`;
+
+const frameworks = [
+  ["React and Next.js", "A client component that sends without a page reload.", react],
+  ["Vue and Nuxt", "A single-file component.", vue],
+  ["Svelte and SvelteKit", "Svelte 5 runes.", svelte],
+  ["Webflow", "No code: point the form's settings here.", webflow],
+] as const;
+
 const prompt = `Connect the contact form on my site to my form backend.
 - Set the form's action to ${endpoint} and method to POST. No server code or API key is needed.
 - Every input needs a name attribute; the names become the field names in the inbox.
@@ -52,7 +139,7 @@ const testNote = !form.config.active
     : "";
 
 const blocks = [
-  ["HTML form", "Any site, any framework (Astro, React, plain HTML). Field names become columns in the inbox.", html],
+  ["HTML form", "Any site: plain HTML, Astro, Hugo, Jekyll, WordPress. Field names become columns in the inbox.", html],
   ["With file uploads", "Add enctype=\"multipart/form-data\". Files are stored on this server; the email links to them.", files],
   ["Without a page reload", "Send the form with fetch and ask for JSON.", ajax],
   ...(captcha ? [["CAPTCHA widget", "Put this inside your form, above the button. Posts without it are refused.", captcha] as const] : []),
@@ -84,6 +171,27 @@ const blocks = [
           <button class={button("outline", "sm")} data-copy={code}>Copy</button>
         </div>
         <pre class="bg-muted overflow-x-auto rounded-lg p-3 text-xs whitespace-pre-wrap"><code>{code}</code></pre>
+      </section>
+    ))
+  }
+  {
+    [["Frameworks", "The same contact form for your framework. Astro and plain HTML use the HTML form above.", frameworks], ["Templates", "Ready-made forms, already pointed here. Style them like the rest of your site.", templates(endpoint).map((t) => [t.name, t.description, t.code] as const)]].map(([title, text, items]) => (
+      <section class="flex flex-col gap-2 rounded-lg border p-4">
+        <h2 class="text-sm font-medium">{title}</h2>
+        <p class="text-muted-foreground text-sm">{text}</p>
+        <div class="divide-y rounded-lg border">
+          {(items as readonly (readonly [string, string, string])[]).map(([name, note, code]) => (
+            <details class="group px-3 py-2">
+              <summary class="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                <span>{name} <span class="text-muted-foreground text-xs">{note}</span></span>
+              </summary>
+              <div class="flex flex-col gap-2 pt-2">
+                <button class={button("outline", "sm") + " self-end"} data-copy={code}>Copy</button>
+                <pre class="bg-muted overflow-x-auto rounded-lg p-3 text-xs whitespace-pre-wrap"><code>{code}</code></pre>
+              </div>
+            </details>
+          ))}
+        </div>
       </section>
     ))
   }

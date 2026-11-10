@@ -119,6 +119,20 @@ ve Mailchimp HTTP 200). Yapılmayanlar:
   "Gitupcms Forms localhost" anahtarının değeri bir kez araç çıktısına düştü, test bitince yenilenmeli. Daha önce sohbete
   yapıştırılan Slack, Notion, Airtable ve Telegram tokenları da yenilenmeli.
 
+## 4d. FormBold özellikleri — yapıldı (2026-11-10)
+
+- Analitik sekmesi: günlük gönderim/spam grafiği, site ve ülke dağılımı, bu ay / geçen ay. Sayaç gelişte artar.
+- Gelen kutusu: okunmadı, yıldız, tarih aralığı, sıralama, sayfa boyutu, toplu işlemler.
+- Gönderimleri saklamama (yalnızca e-posta ve kanallar); e-postada giriş metni, saatlik/günlük özet, önizleme.
+- Çalışma alanları (formları grupla, geçiş yap, taşı).
+- Google ile giriş ve giriş sayfasında Turnstile.
+- Hazır form şablonları (7) ve React/Next, Vue, Svelte, Webflow kodları.
+- Cloud için: aylık gönderim sınırı, form sınırı, "Powered by" satırı, **Usage** sayfası.
+
+Yapılmayanlar: Stripe ile ödeme ve plan seçimi (plan ve fiyatlar belli değil), çalışma alanı başına üye yetkisi
+(şimdi herkes her alanı görür), HubSpot, alıcı adresi doğrulama, görsel workflow. Google girişi canlı denenmedi
+(Google OAuth istemcisi gerekiyor).
+
 ## 5. Yapmayacaklarımız
 
 - Görsel form builder ve embed: formu site ya da AI ajanı yazar (kullanıcı kararı, 2026-11-10).

@@ -30,13 +30,29 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
         <span class={hint}>Goes to the form's <code>email</code> (or <code>_replyto</code>) field, at most once a day per address. Not sent for spam.</span>
       </span>
     </label>
+    <label class={label}>
+      Intro text
+      <textarea class={inputClass + " min-h-20 py-2"} name="config.email.intro" maxlength="2000" placeholder="Shown at the top of every notification email, e.g. who should answer it.">{c.email.intro}</textarea>
+    </label>
+    <label class={label}>
+      Grouping
+      <select class={inputClass} name="config.email.digest" disabled={!c.archive}>
+        {[["", "One email per submission"], ["hourly", "One email an hour with everything new"], ["daily", "One email a day with everything new"]].map(([v, l]) => <option value={v} selected={c.email.digest === v}>{l}</option>)}
+      </select>
+      <span class={hint}>{c.archive ? "Channels, webhooks and the auto-reply still go out at once. Send again from the inbox emails one right away." : "Needs stored submissions (Settings)."}</span>
+    </label>
     <label class={label}>Auto-reply subject <input class={inputClass} name="config.autoReply.subject" value={c.autoReply.subject} maxlength="200" /></label>
     <label class={label}>
       Auto-reply text
       <textarea class={inputClass + " min-h-32 py-2"} name="config.autoReply.body">{c.autoReply.body}</textarea>
       <span class={hint}><code>{"{{name}}"}</code> puts in a field's value (shortened, links removed so the reply cannot carry spam).</span>
     </label>
-    <div class="flex items-center gap-3"><Button type="submit">Save</Button><span role="status" data-status></span></div>
+    <div class="flex items-center gap-3">
+      <Button type="submit">Save</Button>
+      <button type="button" class={button("outline")} data-preview>Preview email</button>
+      <span role="status" data-status></span>
+    </div>
+    <iframe class="hidden h-80 w-full rounded-lg border bg-white" sandbox="" title="Notification email preview" data-preview-frame></iframe>
   </form>
 
   <form class={card} data-save>
@@ -137,6 +153,12 @@ const secret = (saved: string) => (saved ? "Saved (leave empty to keep it)" : ""
 </div>
 
 <script define:vars={{ key: form.key }}>
+  document.querySelector("[data-preview]").addEventListener("click", async () => {
+    const res = await fetch(`/api/forms/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview-email" }) });
+    const frame = document.querySelector("[data-preview-frame]");
+    frame.srcdoc = (await res.json()).data?.html ?? "Could not load the preview.";
+    frame.classList.remove("hidden");
+  });
   const secret = document.querySelector("[data-secret]");
   document.querySelector("[data-reveal]").addEventListener("click", (e) => {
     secret.type = secret.type === "password" ? "text" : "password";

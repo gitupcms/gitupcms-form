@@ -59,6 +59,34 @@ const formColumns = (db.prepare("PRAGMA table_info(form)").all() as { name: stri
 if (!formColumns.includes("retention_days")) db.exec("ALTER TABLE form ADD COLUMN retention_days INTEGER NOT NULL DEFAULT 0");
 // Encrypted JSON: CAPTCHA, channels (with their tokens), rules, auto-reply. See config.ts.
 if (!formColumns.includes("config")) db.exec("ALTER TABLE form ADD COLUMN config TEXT NOT NULL DEFAULT ''");
+if (!formColumns.includes("workspace_id")) db.exec("ALTER TABLE form ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''");
+const subColumns = (db.prepare("PRAGMA table_info(submission)").all() as { name: string }[]).map((c) => c.name);
+if (!subColumns.includes("read_at")) db.exec("ALTER TABLE submission ADD COLUMN read_at INTEGER");
+if (!subColumns.includes("starred")) db.exec("ALTER TABLE submission ADD COLUMN starred INTEGER NOT NULL DEFAULT 0");
+db.exec(`
+CREATE TABLE IF NOT EXISTS workspace (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+`);
+// Counts per day for Analytics and the monthly limit. Kept apart from submissions, so they survive deletion,
+// retention and forms that do not store submissions. The status is the spam filter's verdict on arrival.
+const hadStats = !!db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'stat'").get();
+db.exec(`
+CREATE TABLE IF NOT EXISTS stat (
+  form_key TEXT NOT NULL REFERENCES form(key) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source TEXT NOT NULL,
+  country TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  PRIMARY KEY (form_key, day, status, source, country)
+);
+`);
+if (!hadStats)
+  db.exec(`INSERT INTO stat (form_key, day, status, source, country, n)
+    SELECT form_key, date(created_at, 'unixepoch'), status, replace(replace(origin, 'https://', ''), 'http://', ''), '', COUNT(*) FROM submission GROUP BY 1, 2, 3, 4`);
 db.exec(`
 CREATE TABLE IF NOT EXISTS api_key (
   id TEXT PRIMARY KEY,
@@ -86,6 +114,7 @@ export type Form = {
   blocklist: string;
   retentionDays: number;
   config: FormConfig;
+  workspaceId: string;
   createdAt: number;
 };
 export type FileInfo = { field: string; name: string; type: string; size: number };
@@ -100,13 +129,15 @@ export type Submission = {
   origin: string;
   subject: string;
   replyTo: string;
+  read: boolean;
+  starred: boolean;
   createdAt: number;
 };
 
 const seal = (value: unknown) => encrypt(JSON.stringify(value));
 const open = (value: string) => JSON.parse(decrypt(value));
 
-const FORM_COLUMNS = `key, name, domains, recipients, redirect, webhook_url AS webhookUrl, webhook_secret AS webhookSecret, blocklist, retention_days AS retentionDays, config, created_at AS createdAt`;
+const FORM_COLUMNS = `key, name, domains, recipients, redirect, webhook_url AS webhookUrl, webhook_secret AS webhookSecret, blocklist, retention_days AS retentionDays, config, workspace_id AS workspaceId, created_at AS createdAt`;
 const toForm = (row: any): Form | null => (row ? { ...row, webhookSecret: decrypt(row.webhookSecret), config: withDefaults(row.config ? open(row.config) : {}) } : null);
 const toSubmission = (row: any): Submission | null =>
   row
@@ -121,6 +152,8 @@ const toSubmission = (row: any): Submission | null =>
         origin: row.origin,
         subject: open(row.subject),
         replyTo: open(row.reply_to),
+        read: row.read_at !== null,
+        starred: !!row.starred,
         createdAt: row.created_at,
       }
     : null;
@@ -128,21 +161,24 @@ const toSubmission = (row: any): Submission | null =>
 // ---- Forms ----
 
 export const formByKey = (key: string) => toForm(db.prepare(`SELECT ${FORM_COLUMNS} FROM form WHERE key = ?`).get(key));
-export const forms = () =>
+/** Every form, or only one workspace's. */
+export const forms = (workspaceId?: string) =>
   db
     .prepare(
-      `SELECT key, name, domains,
+      `SELECT key, name, domains, workspace_id AS workspaceId,
         (SELECT COUNT(*) FROM submission s WHERE s.form_key = form.key AND s.status = 'inbox') AS inbox,
+        (SELECT COUNT(*) FROM submission s WHERE s.form_key = form.key AND s.status = 'inbox' AND s.read_at IS NULL) AS unread,
         (SELECT MAX(created_at) FROM submission s WHERE s.form_key = form.key AND s.status = 'inbox') AS lastAt
-      FROM form ORDER BY name COLLATE NOCASE`,
+      FROM form ${workspaceId ? "WHERE workspace_id = ?" : ""} ORDER BY name COLLATE NOCASE`,
     )
-    .all() as { key: string; name: string; domains: string; inbox: number; lastAt: number | null }[];
+    .all(...(workspaceId ? [workspaceId] : [])) as { key: string; name: string; domains: string; workspaceId: string; inbox: number; unread: number; lastAt: number | null }[];
 
-export const createForm = (name: string, recipient: string) => {
+export const createForm = (name: string, recipient: string, workspaceId = workspaces()[0].id) => {
   const key = id(12);
-  db.prepare("INSERT INTO form (key, name, recipients, webhook_secret, created_at) VALUES (?, ?, ?, ?, ?)").run(key, name, recipient, encrypt(newSecret()), now());
+  db.prepare("INSERT INTO form (key, name, recipients, webhook_secret, workspace_id, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(key, name, recipient, encrypt(newSecret()), workspaceId, now());
   return key;
 };
+export const moveForm = (key: string, workspaceId: string) => db.prepare("UPDATE form SET workspace_id = ? WHERE key = ?").run(workspaceId, key);
 const newSecret = () => `whsec_${id(24)}`;
 
 export const RETENTION_DAYS = [0, 30, 90, 180, 365];
@@ -195,7 +231,7 @@ export const countSend = (formKey: string, ip: string) => {
 const hashOf = (formKey: string, data: Fields) => createHmac("sha256", env("BETTER_AUTH_SECRET") ?? "").update(formKey).update(JSON.stringify(data)).digest("base64url");
 
 /** Scores and stores a parsed submission (its files too); returns it. */
-export const saveSubmission = async (form: Form, parsed: Parsed, meta: { ip: string; origin: string; recentFromIp: number }) => {
+export const saveSubmission = async (form: Form, parsed: Parsed, meta: { ip: string; origin: string; recentFromIp: number; country?: string }) => {
   const hash = hashOf(form.key, parsed.data);
   const duplicate = !!db.prepare("SELECT 1 FROM submission WHERE form_key = ? AND hash = ? AND created_at > ?").get(form.key, hash, now() - 86400);
   const check = spamCheck({ data: parsed.data, honeypot: parsed.options.honeypot, email: parsed.options.replyTo, ip: meta.ip, recentFromIp: meta.recentFromIp, duplicate, blocklist: form.blocklist, threshold: SENSITIVITY[form.config.sensitivity] });
@@ -216,35 +252,57 @@ export const saveSubmission = async (form: Form, parsed: Parsed, meta: { ip: str
     `INSERT INTO submission (id, form_key, data, files, status, score, signals, hash, origin, subject, reply_to, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(subId, form.key, seal(parsed.data), seal(files), check.spam ? "spam" : "inbox", check.score, JSON.stringify(check.signals), hash, meta.origin, seal(parsed.options.subject), seal(parsed.options.replyTo), now());
+  db.prepare(
+    `INSERT INTO stat (form_key, day, status, source, country, n) VALUES (?, date('now'), ?, ?, ?, 1)
+     ON CONFLICT DO UPDATE SET n = n + 1`,
+  ).run(form.key, check.spam ? "spam" : "inbox", meta.origin.replace(/^https?:\/\//, ""), meta.country ?? "");
   return submissionById(subId)!;
 };
 
 export const submissionById = (subId: string) => toSubmission(db.prepare("SELECT * FROM submission WHERE id = ?").get(subId));
 
 export const PAGE = 50;
+export const PER_PAGE = [25, 50, 100];
 const values = (s: Submission) => Object.values(s.data).flat();
-/** One page of a form's inbox or spam, newest first; `q` searches every field. */
-/** `formKey` null: every form (the shared inbox). */
-export const submissions = (formKey: string | null, status: "inbox" | "spam", q = "", page = 1) => {
-  const where = `status = ?${formKey ? " AND form_key = ?" : ""}`;
-  const args = formKey ? [status, formKey] : [status];
-  const select = `SELECT * FROM submission WHERE ${where} ORDER BY created_at DESC, rowid DESC`;
+export const VIEWS = ["inbox", "unread", "starred", "spam"] as const;
+export type View = (typeof VIEWS)[number];
+const VIEW_SQL: Record<View, string> = { inbox: "status = 'inbox'", unread: "status = 'inbox' AND read_at IS NULL", starred: "starred = 1", spam: "status = 'spam'" };
+/** One form's key, a list of keys (a workspace), or null for every form. */
+type Scope = string | string[] | null;
+const scopeSql = (scope: Scope): [string, string[]] =>
+  scope === null ? ["", []] : typeof scope === "string" ? [" AND form_key = ?", [scope]] : [` AND form_key IN (${scope.map(() => "?").join(", ") || "NULL"})`, scope];
+export type ListOptions = { perPage?: number; days?: number; order?: "new" | "old" };
+/** One page of submissions in a view, newest first unless asked; `q` searches every field, `days` keeps the recent ones. */
+export const submissions = (scope: Scope, view: View, q = "", page = 1, o: ListOptions = {}) => {
+  const perPage = o.perPage ?? PAGE;
+  const [sql, keys] = scopeSql(scope);
+  const where = `${VIEW_SQL[view]}${sql}${o.days ? " AND created_at > ?" : ""}`;
+  const args: (string | number)[] = o.days ? [...keys, now() - o.days * 86400] : keys;
+  const dir = o.order === "old" ? "ASC" : "DESC";
+  const select = `SELECT * FROM submission WHERE ${where} ORDER BY created_at ${dir}, rowid ${dir}`;
   if (!q) {
     const total = (db.prepare(`SELECT COUNT(*) AS n FROM submission WHERE ${where}`).get(...args) as { n: number }).n;
-    return { total, items: db.prepare(`${select} LIMIT ? OFFSET ?`).all(...args, PAGE, (page - 1) * PAGE).map((r) => toSubmission(r)!) };
+    return { total, items: db.prepare(`${select} LIMIT ? OFFSET ?`).all(...args, perPage, (page - 1) * perPage).map((r) => toSubmission(r)!) };
   }
   // shortcut: fields are encrypted, so search decrypts the whole inbox in memory; fine to tens of thousands, then add an index.
   const needle = q.toLowerCase();
   const hits = db.prepare(select).all(...args).map((r) => toSubmission(r)!).filter((s) => values(s).some((v) => v.toLowerCase().includes(needle)));
-  return { total: hits.length, items: hits.slice((page - 1) * PAGE, page * PAGE) };
+  return { total: hits.length, items: hits.slice((page - 1) * perPage, page * perPage) };
 };
 /** Every submission of a form with this status, oldest first (CSV export). */
 export const allSubmissions = (formKey: string, status: "inbox" | "spam") =>
   db.prepare("SELECT * FROM submission WHERE form_key = ? AND status = ? ORDER BY created_at, rowid").all(formKey, status).map((r) => toSubmission(r)!);
-export const counts = (formKey: string | null) =>
-  Object.fromEntries((db.prepare(`SELECT status, COUNT(*) AS n FROM submission ${formKey ? "WHERE form_key = ?" : ""} GROUP BY status`).all(...(formKey ? [formKey] : [])) as { status: string; n: number }[]).map((r) => [r.status, r.n])) as Partial<Record<"inbox" | "spam", number>>;
+export const counts = (scope: Scope) => {
+  const [sql, keys] = scopeSql(scope);
+  const r = db
+    .prepare(`SELECT SUM(status = 'inbox') AS inbox, SUM(status = 'spam') AS spam, SUM(status = 'inbox' AND read_at IS NULL) AS unread, SUM(starred) AS starred FROM submission WHERE 1${sql}`)
+    .get(...keys) as Record<View, number | null>;
+  return Object.fromEntries(VIEWS.map((v) => [v, r[v] ?? 0])) as Record<View, number>;
+};
 
 export const setStatus = (subId: string, status: "inbox" | "spam") => db.prepare("UPDATE submission SET status = ? WHERE id = ?").run(status, subId).changes > 0;
+export const setRead = (subId: string, read: boolean) => db.prepare(`UPDATE submission SET read_at = ${read ? "COALESCE(read_at, ?)" : "NULL"} WHERE id = ?`).run(...(read ? [now(), subId] : [subId]));
+export const setStarred = (subId: string, starred: boolean) => db.prepare("UPDATE submission SET starred = ? WHERE id = ?").run(starred ? 1 : 0, subId);
 export const deleteSubmission = (subId: string) => {
   removeFiles(subId);
   return db.prepare("DELETE FROM submission WHERE id = ?").run(subId).changes > 0;
@@ -258,6 +316,26 @@ export const readUpload = (subId: string, n: number) => {
     return null;
   }
 };
+
+// ---- Workspaces: forms grouped by client or project ----
+
+export const workspaces = () =>
+  db.prepare("SELECT id, name, (SELECT COUNT(*) FROM form WHERE workspace_id = workspace.id) AS forms FROM workspace ORDER BY created_at, rowid").all() as { id: string; name: string; forms: number }[];
+export const createWorkspace = (name: string) => {
+  const wsId = id(8);
+  db.prepare("INSERT INTO workspace (id, name, created_at) VALUES (?, ?, ?)").run(wsId, name, now());
+  return wsId;
+};
+export const renameWorkspace = (wsId: string, name: string) => db.prepare("UPDATE workspace SET name = ? WHERE id = ?").run(name, wsId).changes > 0;
+/** Only an empty workspace, and never the last one. */
+export const deleteWorkspace = (wsId: string) => {
+  const all = workspaces();
+  if (all.length < 2 || all.find((w) => w.id === wsId)?.forms !== 0) return false;
+  return db.prepare("DELETE FROM workspace WHERE id = ?").run(wsId).changes > 0;
+};
+// The first start (or an upgrade from before workspaces) gets one, holding every form.
+if (!workspaces().length) createWorkspace("My workspace");
+db.prepare("UPDATE form SET workspace_id = ? WHERE workspace_id NOT IN (SELECT id FROM workspace)").run(workspaces()[0].id);
 
 // ---- Retention and data requests ----
 

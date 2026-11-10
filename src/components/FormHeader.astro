@@ -10,8 +10,9 @@ interface Props {
 const { form, tab } = Astro.props;
 const n = counts(form.key);
 const tabs = [
-  ["inbox", `Inbox${n.inbox ? ` (${n.inbox})` : ""}`],
+  ["inbox", `Inbox${n.unread ? ` (${n.unread} new)` : n.inbox ? ` (${n.inbox})` : ""}`],
   ["spam", `Spam${n.spam ? ` (${n.spam})` : ""}`],
+  ["analytics", "Analytics"],
   ["setup", "Setup"],
   ["delivery", "Delivery"],
   ["rules", `Rules${form.config.rules.length ? ` (${form.config.rules.length})` : ""}`],

@@ -2,20 +2,29 @@
 import Base from "./Base.astro";
 import { Button } from "@/components/ui/button";
 import { Inbox } from "@lucide/astro";
+import { workspaces } from "@/plugins/forms/lib/forms";
 
 interface Props {
   title?: string;
 }
 const { title } = Astro.props;
-const admin = Astro.locals.admin;
+const { admin, workspace } = Astro.locals;
+const all = workspaces();
 ---
 
 <Base title={title}>
   <header class="border-b">
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-      <a href="/" class="flex items-center gap-2 font-medium"><Inbox class="size-4" /> Gitupcms Forms</a>
-      <div class="flex items-center gap-3 text-sm">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-2 font-medium"><Inbox class="size-4" /> Gitupcms Forms</a>
+        <select class="bg-background h-8 rounded-md border px-2 text-sm" aria-label="Workspace" data-workspace>
+          {all.map((w) => <option value={w.id} selected={w.id === workspace.id}>{w.name}</option>)}
+        </select>
+      </div>
+      <div class="flex flex-wrap items-center gap-3 text-sm">
         <a href="/inbox" class="text-muted-foreground hover:text-foreground">Inbox</a>
+        <a href="/workspaces" class="text-muted-foreground hover:text-foreground">Workspaces</a>
+        <a href="/usage" class="text-muted-foreground hover:text-foreground">Usage</a>
         <a href="/api-keys" class="text-muted-foreground hover:text-foreground">API</a>
         <a href="/data-requests" class="text-muted-foreground hover:text-foreground">Data requests</a>
         <a href="/team" class="text-muted-foreground hover:text-foreground">Team</a>
@@ -30,6 +39,12 @@ const admin = Astro.locals.admin;
 </Base>
 
 <script>
+  import { post } from "@/lib/post";
+  const select = document.querySelector<HTMLSelectElement>("[data-workspace]")!;
+  select.addEventListener("change", async () => {
+    await post("/api/workspaces", { action: "switch", id: select.value });
+    location.href = "/";
+  });
   document.querySelector("[data-sign-out]")?.addEventListener("click", async () => {
     await fetch("/api/auth/sign-out", { method: "POST" });
     location.href = "/login";

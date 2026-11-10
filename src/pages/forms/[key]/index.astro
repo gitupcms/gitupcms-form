@@ -7,11 +7,12 @@ import Delivery from "@/components/Delivery.astro";
 import Rules from "@/components/Rules.astro";
 import Security from "@/components/Security.astro";
 import Settings from "@/components/Settings.astro";
+import Analytics from "@/components/Analytics.astro";
 import { formByKey } from "@/plugins/forms/lib/forms";
 
 const form = formByKey(Astro.params.key ?? "");
 if (!form) return Astro.redirect("/");
-const TABS = ["inbox", "spam", "setup", "delivery", "rules", "security", "settings"] as const;
+const TABS = ["inbox", "spam", "analytics", "setup", "delivery", "rules", "security", "settings"] as const;
 const asked = Astro.url.searchParams.get("tab") as (typeof TABS)[number];
 const tab = TABS.includes(asked) ? asked : "inbox";
 ---
@@ -20,6 +21,7 @@ const tab = TABS.includes(asked) ? asked : "inbox";
   <div class="flex flex-col gap-6" data-key={form.key}>
     <FormHeader form={form} tab={tab} />
     {(tab === "inbox" || tab === "spam") && <Inbox form={form} status={tab} />}
+    {tab === "analytics" && <Analytics form={form} />}
     {tab === "setup" && <Setup form={form} />}
     {tab === "delivery" && <Delivery form={form} />}
     {tab === "rules" && <Rules form={form} />}

@@ -1,6 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { adminOf, appOrigin } from "@/lib/admin";
-import { apiKeyFor } from "@/plugins/forms/lib/forms";
+import { apiKeyFor, workspaces } from "@/plugins/forms/lib/forms";
 
 // Open to everyone: admin sign-in, and what sites post to (the form endpoint and the email's spam link).
 const PUBLIC = ["/login", "/api/auth/", "/f/", "/_astro/", "/favicon"];
@@ -20,5 +20,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const admin = await adminOf(ctx.request.headers);
   if (!admin) return path.startsWith("/api/") ? Response.json({ error: "Sign in first." }, { status: 401 }) : ctx.redirect("/login");
   ctx.locals.admin = admin;
+  const all = workspaces();
+  ctx.locals.workspace = all.find((w) => w.id === ctx.cookies.get("gf-workspace")?.value) ?? all[0];
   return next();
 });

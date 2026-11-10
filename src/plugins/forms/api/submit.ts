@@ -5,7 +5,9 @@
 import type { APIRoute } from "astro";
 import { appOrigin } from "@/lib/admin";
 import { HttpError } from "@/lib/http";
-import { countSend, formByKey, HARD_LIMIT, originAllowed, saveSubmission, type Form } from "../lib/forms";
+import { LIMITS } from "@/lib/limits";
+import { countSend, deleteSubmission, formByKey, HARD_LIMIT, originAllowed, saveSubmission, type Form } from "../lib/forms";
+import { monthUsage } from "../lib/stats";
 import { parseSubmission } from "../lib/parse";
 import { deliver } from "../lib/deliver";
 import { page } from "../lib/page";
@@ -63,14 +65,20 @@ export const POST: APIRoute = async ({ params, request, clientAddress }) => {
     const ip = (env("TRUST_PROXY") === "1" && request.headers.get("x-forwarded-for")?.split(",")[0].trim()) || clientAddress || "";
     const recentFromIp = countSend(form.key, ip);
     if (recentFromIp >= HARD_LIMIT) throw new HttpError("Too many submissions. Try again in a few minutes.", 429);
+    if (LIMITS.submissions && monthUsage() >= LIMITS.submissions) throw new HttpError("This form has reached its monthly limit. Try again next month.", 429);
     const parsed = await parseSubmission(request);
     // The honeypot catches bots without a CAPTCHA round-trip; they get the usual answer and land in Spam.
     if (!parsed.options.honeypot) {
       const captchaError = await checkCaptcha(form.config.captcha, form.key, parsed.options.captcha, ip);
       if (captchaError) throw new HttpError(captchaError, 400);
     }
-    const sub = await saveSubmission(form, parsed, { ip, origin: origin ?? "", recentFromIp });
-    if (sub.status === "inbox") deliver(form, sub).catch((e) => console.error("Delivery failed:", e));
+    // For Analytics only: the visitor's country as the proxy (Cloudflare, Vercel) sends it; never the IP.
+    const country = env("TRUST_PROXY") === "1" ? (request.headers.get("cf-ipcountry") ?? request.headers.get("x-vercel-ip-country") ?? "").toUpperCase() : "";
+    const sub = await saveSubmission(form, parsed, { ip, origin: origin ?? "", recentFromIp, country: /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "" });
+    // A form that does not store submissions keeps them only until they are sent on.
+    const drop = () => form.config.archive || deleteSubmission(sub.id);
+    if (sub.status === "inbox") deliver(form, sub).catch((e) => console.error("Delivery failed:", e)).finally(drop);
+    else drop();
     if (json) return Response.json({ ok: true, id: sub.id }, { headers });
     const to = redirectTo(form, parsed.options.redirect, origin);
     return to ? new Response(null, { status: 303, headers: { Location: to } }) : page("Thank you!", "Your message was sent.", 200, origin);

@@ -1,0 +1,63 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), "forms-inbox-")), "db.sqlite");
+process.env.BETTER_AUTH_SECRET = "test-secret";
+const { db } = await import("../../../lib/db.ts");
+const f = await import("./forms.ts");
+const { analytics, monthUsage } = await import("./stats.ts");
+const { defaults, patchConfig } = await import("./config.ts");
+
+const form = f.formByKey(f.createForm("Contact", "owner@example.com"))!;
+const save = (name: string, origin = "https://site.test", country = "") =>
+  f.saveSubmission(form, { data: { name, message: "Hello there" }, files: [], options: { redirect: "", subject: "", replyTo: "", honeypot: "", captcha: "" } }, { ip: "203.0.113.7", origin, recentFromIp: 0, country });
+
+test("unread and starred views, read state, date range and order", async () => {
+  const a = await save("Ada");
+  const b = await save("Bob");
+  db.prepare("UPDATE submission SET created_at = created_at - 10 * 86400 WHERE id = ?").run(a.id);
+  assert.deepEqual(f.counts(form.key), { inbox: 2, unread: 2, starred: 0, spam: 0 });
+  f.setRead(b.id, true);
+  f.setStarred(a.id, true);
+  assert.deepEqual(f.submissions(form.key, "unread").items.map((s) => s.id), [a.id]);
+  assert.deepEqual(f.submissions(form.key, "starred").items.map((s) => s.id), [a.id]);
+  assert.deepEqual(f.submissions(form.key, "inbox", "", 1, { days: 7 }).items.map((s) => s.id), [b.id]);
+  assert.deepEqual(f.submissions(form.key, "inbox", "", 1, { order: "old" }).items.map((s) => s.id), [a.id, b.id]);
+  assert.equal(f.submissions(form.key, "inbox", "", 2, { perPage: 1 }).items[0].id, a.id);
+  assert.equal(f.submissions([], "inbox").total, 0, "an empty workspace shows nothing");
+  f.setRead(b.id, false);
+  assert.equal(f.counts([form.key]).unread, 2);
+});
+
+test("analytics count on arrival, by site and country, and survive deletion", async () => {
+  const s = await save("Cy", "https://shop.test", "TR");
+  f.deleteSubmission(s.id);
+  const a = analytics(form.key, 7);
+  assert.equal(a.total, 3);
+  assert.equal(a.series.length, 7);
+  assert.equal(a.series.at(-1)!.inbox, 3);
+  assert.deepEqual(a.countries.find((c) => c.name === "TR"), { name: "TR", n: 1 });
+  assert.deepEqual(a.sources[0], { name: "site.test", n: 2 });
+  assert.equal(monthUsage(), 3);
+});
+
+test("workspaces: forms move, an empty one can go, the last one stays", () => {
+  const [first] = f.workspaces();
+  assert.equal(form.workspaceId, first.id);
+  const ws = f.createWorkspace("Client");
+  f.moveForm(form.key, ws);
+  assert.deepEqual(f.forms(ws).map((x) => x.key), [form.key]);
+  assert.equal(f.deleteWorkspace(ws), false, "still has a form");
+  f.moveForm(form.key, first.id);
+  assert.equal(f.deleteWorkspace(ws), true);
+  assert.equal(f.deleteWorkspace(first.id), false, "the last workspace stays");
+});
+
+test("a digest needs stored submissions", () => {
+  assert.throws(() => patchConfig(defaults(), { archive: false, email: { intro: "", digest: "daily" } }), /digest needs stored/);
+  assert.equal(patchConfig(defaults(), { email: { intro: "Hi team", digest: "hourly" } }).email.digest, "hourly");
+  assert.throws(() => patchConfig(defaults(), { email: { digest: "weekly" } }), /valid digest/);
+});

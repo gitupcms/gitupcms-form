@@ -3,7 +3,7 @@ import Base from "@/layouts/Base.astro";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { inputClass } from "@/components/ui/island";
-import { adminOf, githubEnabled, hasAdmin } from "@/lib/admin";
+import { adminOf, githubEnabled, googleEnabled, hasAdmin, turnstileSiteKey } from "@/lib/admin";
 import { inviteEmail } from "@/lib/team";
 
 if (await adminOf(Astro.request.headers)) return Astro.redirect("/");
@@ -18,7 +18,7 @@ const error = Astro.url.searchParams.get("error");
       <CardHeader>
         <CardTitle>{invite ? "Join Gitupcms Forms" : setup ? "Create the admin account" : "Sign in to Gitupcms Forms"}</CardTitle>
         <CardDescription>
-          {invite ? `You were invited as ${invite}. Choose a password, or use the GitHub account with this email.` : setup ? "The first account runs this server. After it, only invited people can join." : "Form submissions for your sites, on your own server."}
+          {invite ? `You were invited as ${invite}. Choose a password, or use a GitHub or Google account with this email.` : setup ? "The first account runs this server. After it, only invited people can join." : "Form submissions for your sites, on your own server."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -26,20 +26,23 @@ const error = Astro.url.searchParams.get("error");
           {setup && <input class={inputClass} name="name" placeholder="Your name" autocomplete="name" required aria-label="Name" />}
           <input class={inputClass} name="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email" value={invite ?? undefined} readonly={!!invite} />
           <input class={inputClass} name="password" type="password" placeholder={setup ? "Password (10+ characters)" : "Password"} minlength={setup ? 10 : undefined} autocomplete={setup ? "new-password" : "current-password"} required aria-label="Password" />
+          {turnstileSiteKey && <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>}
           <Button type="submit">{setup ? "Create account" : "Sign in"}</Button>
-          {githubEnabled && <Button type="button" variant="outline" data-github>{setup ? "Continue with GitHub" : "Sign in with GitHub"}</Button>}
-          <p role="alert" class="text-destructive text-sm empty:hidden" data-error>{error ? (error === "unable_to_create_user" ? "Only invited people can join. Ask an admin for an invite (with the same email as your GitHub account)." : error.replace(/_/g, " ")) : ""}</p>
+          {githubEnabled && <Button type="button" variant="outline" data-social="github">{setup ? "Continue with GitHub" : "Sign in with GitHub"}</Button>}
+          {googleEnabled && <Button type="button" variant="outline" data-social="google">{setup ? "Continue with Google" : "Sign in with Google"}</Button>}
+          <p role="alert" class="text-destructive text-sm empty:hidden" data-error>{error ? (error === "unable_to_create_user" ? "Only invited people can join. Ask an admin for an invite (with the same email as your GitHub or Google account)." : error.replace(/_/g, " ")) : ""}</p>
         </form>
       </CardContent>
     </Card>
   </main>
+  {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
 </Base>
 
 <script>
   const form = document.querySelector<HTMLFormElement>("[data-form]")!;
   const error = document.querySelector<HTMLElement>("[data-error]")!;
-  const call = async (path: string, body: object) => {
-    const res = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const call = async (path: string, body: object, headers: Record<string, string> = {}) => {
+    const res = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.message || "Something went wrong.");
     return json;
@@ -48,17 +51,21 @@ const error = Astro.url.searchParams.get("error");
     e.preventDefault();
     error.textContent = "";
     try {
-      await call(`${form.dataset.form}/email`, Object.fromEntries(new FormData(form)));
+      const { "cf-turnstile-response": token, ...fields } = Object.fromEntries(new FormData(form));
+      await call(`${form.dataset.form}/email`, fields, token ? { "x-captcha-response": String(token) } : {});
       location.href = "/";
     } catch (err: any) {
       error.textContent = err.message;
+      (window as any).turnstile?.reset();
     }
   });
-  document.querySelector("[data-github]")?.addEventListener("click", async () => {
-    try {
-      location.href = (await call("sign-in/social", { provider: "github", callbackURL: "/" })).url;
-    } catch (err: any) {
-      error.textContent = err.message;
-    }
-  });
+  document.querySelectorAll<HTMLButtonElement>("[data-social]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      try {
+        location.href = (await call("sign-in/social", { provider: b.dataset.social, callbackURL: "/" })).url;
+      } catch (err: any) {
+        error.textContent = err.message;
+      }
+    }),
+  );
 </script>

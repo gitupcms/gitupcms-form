@@ -2,12 +2,13 @@
 import Admin from "@/layouts/Admin.astro";
 import FormHeader from "@/components/FormHeader.astro";
 import { button, sectionLabel } from "@/components/ui/island";
-import { deliveries, formByKey, submissionById } from "@/plugins/forms/lib/forms";
+import { deliveries, formByKey, setRead, submissionById } from "@/plugins/forms/lib/forms";
 import { THRESHOLD } from "@/plugins/forms/lib/spam";
 
 const form = formByKey(Astro.params.key ?? "");
 const sub = form ? submissionById(Astro.params.id ?? "") : null;
 if (!form || !sub || sub.formKey !== form.key) return Astro.redirect(form ? `/forms/${form.key}` : "/");
+if (!sub.read) setRead(sub.id, true);
 const log = deliveries(sub.id);
 const date = (s: number) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "medium" }).format(s * 1000);
 const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
@@ -22,6 +23,8 @@ const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${
       </p>
       <div class="flex gap-2">
         {sub.replyTo && <a class={button("outline", "sm")} href={`mailto:${sub.replyTo}`}>Reply</a>}
+        <button class={button("outline", "sm")} data-bulk={sub.starred ? "unstar" : "star"}>{sub.starred ? "★ Starred" : "☆ Star"}</button>
+        <button class={button("outline", "sm")} data-bulk="unread" data-back>Mark unread</button>
         {sub.status === "inbox" && <button class={button("outline", "sm")} data-action="resend">Send again</button>}
         <button class={button("outline", "sm")} data-action="status" data-status={sub.status === "spam" ? "inbox" : "spam"}>{sub.status === "spam" ? "Not spam" : "Mark as spam"}</button>
         <button class={button("destructive", "sm")} data-action="delete">Delete</button>
@@ -105,6 +108,14 @@ const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${
 </Admin>
 
 <script define:vars={{ key: form.key, id: sub.id }}>
+  document.querySelectorAll("[data-bulk]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      await fetch("/api/submissions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: b.dataset.bulk, ids: [id] }) });
+      if (b.dataset.back !== undefined) location.href = `/forms/${key}`;
+      else location.reload();
+    }),
+  );
   document.querySelectorAll("[data-action]").forEach((b) =>
     b.addEventListener("click", async () => {
       const action = b.dataset.action;

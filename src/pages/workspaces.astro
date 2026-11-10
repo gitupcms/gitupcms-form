@@ -1,0 +1,61 @@
+---
+import Admin from "@/layouts/Admin.astro";
+import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/island";
+import { workspaces } from "@/plugins/forms/lib/forms";
+
+const all = workspaces();
+const current = Astro.locals.workspace;
+---
+
+<Admin title="Workspaces">
+  <div class="flex flex-col gap-6">
+    <div>
+      <h1 class="text-lg font-medium tracking-tight">Workspaces</h1>
+      <p class="text-muted-foreground text-sm">Group forms by client or project. Pick one at the top; a form moves in its Settings tab. Every admin sees every workspace.</p>
+    </div>
+    <ul class="divide-y rounded-lg border">
+      {
+        all.map((w) => (
+          <li class="flex flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <form class="flex flex-1 items-center gap-2" data-rename={w.id}>
+              <input class={inputClass} name="name" value={w.name} required maxlength="100" aria-label="Workspace name" />
+              <Button type="submit" size="sm" variant="outline">Rename</Button>
+            </form>
+            <span class="flex items-center gap-2">
+              <span class="text-muted-foreground text-xs">{w.forms} form{w.forms === 1 ? "" : "s"}{w.id === current.id && " · current"}</span>
+              {w.id !== current.id && <Button size="sm" variant="outline" data-action="switch" data-id={w.id}>Open</Button>}
+              {all.length > 1 && w.forms === 0 && <Button size="sm" variant="ghost" data-action="delete" data-id={w.id}>Delete</Button>}
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+    <form class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end" data-create>
+      <label class="flex flex-1 flex-col gap-1 text-sm">New workspace <input class={inputClass} name="name" placeholder="Client or project name" required maxlength="100" /></label>
+      <Button type="submit">Create</Button>
+    </form>
+    <p role="alert" class="text-destructive text-sm empty:hidden" data-error></p>
+  </div>
+</Admin>
+
+<script>
+  import { post } from "@/lib/post";
+  const error = document.querySelector<HTMLElement>("[data-error]")!;
+  const run = async (body: object, to?: string) => {
+    try {
+      await post("/api/workspaces", body);
+      to ? (location.href = to) : location.reload();
+    } catch (e: any) {
+      error.textContent = e.message;
+    }
+  };
+  const create = document.querySelector<HTMLFormElement>("[data-create]")!;
+  create.addEventListener("submit", (e) => (e.preventDefault(), run({ action: "create", name: new FormData(create).get("name") }, "/")));
+  document.querySelectorAll<HTMLFormElement>("[data-rename]").forEach((f) =>
+    f.addEventListener("submit", (e) => (e.preventDefault(), run({ action: "rename", id: f.dataset.rename, name: new FormData(f).get("name") }))),
+  );
+  document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((b) =>
+    b.addEventListener("click", () => run({ action: b.dataset.action, id: b.dataset.id }, b.dataset.action === "switch" ? "/" : undefined)),
+  );
+</script>

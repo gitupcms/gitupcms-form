@@ -7,6 +7,8 @@ admin panel and your email. No server code on your site, no API key in the page.
 - Spam: hidden honeypot field, link and duplicate checks, per-visitor rate limit, your own blocklist
 - Email with Reply-To set to the sender, and a "mark as spam" link
 - Signed webhooks, CSV export, search, a delivery log per submission
+- Inbox with unread and starred, date range, sort, bulk actions; per-form analytics (per day, by site and country)
+- Workspaces to group forms (one per client, say), ready-made form templates and React, Vue, Svelte, Webflow snippets
 - Everything in a SQLite file on your server; uploaded files next to it
 
 ## Run it
@@ -35,6 +37,10 @@ docker run -d -p 4321:4321 -v gitupcms-forms-data:/data --env-file .env gitupcms
 
 Put it behind HTTPS (Caddy, nginx…) at the address in `BETTER_AUTH_URL`. Behind a reverse proxy, set
 `TRUST_PROXY=1` so rate limits see visitors' addresses; only when the proxy overwrites `X-Forwarded-For`.
+
+Optional: Google sign-in (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`), Cloudflare Turnstile on the sign-in page
+(`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`). For a hosted plan: `MONTHLY_SUBMISSION_LIMIT`, `MAX_FORMS`, and
+`BRANDING=1` (a "Powered by" line in emails and the thank-you page). **Usage** shows this month against the limits.
 
 Open the address. The first account you create is the admin; after that only invited people can sign up
 (**Team**). Back up the database file (`DB_PATH`, default `data/gitupcms-forms.db`) and the `files` folder.
@@ -77,7 +83,7 @@ You are the controller of what your forms collect; this app helps you keep it la
 - What visitors send (fields, files, file names, subject, reply address) is encrypted with AES-256-GCM, with a key
   derived from `BETTER_AUTH_SECRET`. **Changing that secret makes stored submissions unreadable**, so keep it
   safe and back it up with the database.
-- IP addresses are not stored: they live in memory for 10 minutes for rate limiting.
+- IP addresses are not stored: they live in memory for 10 minutes for rate limiting. Analytics keep only per-day counts by site and country.
 - **Settings → Keep submissions** deletes old submissions (30–365 days). Spam is deleted after 30 days.
 - **Data requests** finds everything stored about one email address across all forms, to export it (JSON;
   files are downloaded from each submission) or delete it.
@@ -108,7 +114,10 @@ const ok = Math.abs(Date.now() / 1000 - t) < 300 &&
 - **Delivery**: email recipients, auto-reply, webhook, Slack, Discord, Telegram, Google Sheets, Notion, Airtable, Zapier, Mailchimp (double opt-in).
 - **Rules**: "when topic is sales, email sales@… with subject Lead: {{name}}", with a dry run.
 - **Security**: allowed domains (with a localhost exception), CAPTCHA (Turnstile, hCaptcha, reCAPTCHA, Altcha), spam sensitivity, blocklist.
-- **Settings**: pause the form, redirect, how long to keep submissions.
+- **Settings**: pause the form, redirect, how long to keep submissions, or don't store them at all (email and channels only).
+- **Email**: intro text on top, one email per submission or an hourly/daily digest, a preview of the email.
+- **Analytics**: counted when a submission arrives, so deleting submissions keeps the numbers. Country needs a proxy
+  that sends it (Cloudflare `CF-IPCountry`, Vercel) and `TRUST_PROXY=1`.
 
 ## API and MCP
 

@@ -2,8 +2,8 @@ import type { APIRoute } from "astro";
 import { HttpError } from "@/lib/http";
 import { patchConfig } from "@/plugins/forms/lib/config";
 import { applyRules } from "@/plugins/forms/lib/rules";
-import { deleteForm, deleteSubmission, formByKey, list, RETENTION_DAYS, rotateSecret, saveConfig, setStatus, submissionById, updateForm, type Form } from "@/plugins/forms/lib/forms";
-import { deliver } from "@/plugins/forms/lib/deliver";
+import { deleteForm, deleteSubmission, formByKey, list, moveForm, RETENTION_DAYS, rotateSecret, saveConfig, setStatus, submissionById, submissions, updateForm, workspaces, type Form } from "@/plugins/forms/lib/forms";
+import { deliver, emailHtml } from "@/plugins/forms/lib/deliver";
 
 const url = (value: unknown, label: string) => {
   const v = String(value ?? "").trim();
@@ -38,6 +38,15 @@ const actions: Record<string, (form: Form, body: any) => unknown> = {
       retentionDays,
     });
     saveConfig(form.key, config);
+    if (has("workspaceId")) {
+      if (!workspaces().some((w) => w.id === body.workspaceId)) throw new HttpError("Pick a workspace from the list.", 400);
+      moveForm(form.key, body.workspaceId);
+    }
+  },
+  /** The notification email for the newest submission (or a sample), as saved now. */
+  "preview-email": (form) => {
+    const sub = submissions(form.key, "inbox", "", 1, { perPage: 1 }).items[0] ?? { id: "sample", formKey: form.key, data: { name: "Ada Lovelace", email: "ada@example.com", message: "Hello! I would like a quote." }, files: [], status: "inbox", score: 0, signals: [], origin: "", subject: "", replyTo: "ada@example.com", read: false, starred: false, createdAt: Math.floor(Date.now() / 1000) };
+    return { html: emailHtml(form, sub) };
   },
   /** Dry run: which rules a sample submission would match and what they would do. Nothing is saved or sent. */
   "test-rules": (form, body) => {
@@ -59,7 +68,7 @@ const actions: Record<string, (form: Form, body: any) => unknown> = {
   resend: async (form, body) => {
     const sub = submissionById(String(body.id ?? ""));
     if (!sub || sub.formKey !== form.key) throw new HttpError("Submission not found.", 404);
-    await deliver(form, sub, -1, { autoReply: false });
+    await deliver(form, sub, -1, { autoReply: false, digest: false });
   },
   delete: (form, body) => {
     const sub = submissionById(String(body.id ?? ""));

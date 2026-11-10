@@ -16,8 +16,13 @@ export type Rule = {
   /** Empty strings mean "leave as is". `to` replaces the form's recipients for this submission. */
   actions: { to: string; subject: string; webhook: string; spam: boolean; stop: boolean };
 };
+export const DIGESTS = ["", "hourly", "daily"] as const;
 export type FormConfig = {
   active: boolean;
+  /** false: submissions are only sent on (email, channels), then deleted; nothing stays on the server. */
+  archive: boolean;
+  /** `intro` heads the notification email; a `digest` sends one email an hour or a day instead of one per submission. */
+  email: { intro: string; digest: (typeof DIGESTS)[number] };
   allowLocalhost: boolean;
   sensitivity: keyof typeof SENSITIVITY;
   captcha: { provider: (typeof CAPTCHAS)[number]; siteKey: string; secret: string; minScore: number };
@@ -37,6 +42,8 @@ export type FormConfig = {
 
 export const defaults = (): FormConfig => ({
   active: true,
+  archive: true,
+  email: { intro: "", digest: "" },
   allowLocalhost: true,
   sensitivity: "medium",
   captcha: { provider: "", siteKey: "", secret: "", minScore: 0.5 },
@@ -100,6 +107,8 @@ const rule = (r: any, i: number): Rule => {
 /** Each section the admin may save, checked and cleaned. Unknown keys are refused. */
 const sections: { [K in keyof FormConfig]: (v: any) => FormConfig[K] } = {
   active: bool,
+  archive: bool,
+  email: (v) => ({ intro: str(v?.intro, 2000), digest: oneOf(v?.digest ?? "", DIGESTS, "digest") }),
   allowLocalhost: bool,
   sensitivity: (v) => oneOf(v, Object.keys(SENSITIVITY) as (keyof typeof SENSITIVITY)[], "spam sensitivity"),
   captcha: (v) => {
@@ -169,5 +178,6 @@ export const patchConfig = (current: FormConfig, patch: Record<string, unknown>)
     if (keep && v && typeof v === "object" && !str(v[keep[0]]) && str(v[keep[1]])) v = { ...v, [keep[0]]: (current as any)[k][keep[0]] };
     next[k] = (sections as any)[k](v);
   }
+  if (!next.archive && next.email.digest) throw new HttpError("A digest needs stored submissions: keep storing them, or send one email per submission.", 400);
   return next;
 };
