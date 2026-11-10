@@ -72,4 +72,14 @@ test("CSV export follows the view, search and date filters", async () => {
   assert.equal((await csv("days=7")).length, 2, "Ada is ten days old");
   assert.equal((await csv("view=starred")).length, 2);
   assert.equal((await csv("status=spam")).length, 1, "old ?status=spam still means spam");
+
+  // More rows than one read chunk: every row once, in order, and search still pages.
+  const big = f.formByKey(f.createForm("Big", "owner@example.com"))!;
+  const row = db.prepare("INSERT INTO submission (id, form_key, data, files, status, score, signals, hash, origin, subject, reply_to, created_at) SELECT ?, ?, data, files, status, score, signals, hash, origin, subject, reply_to, ? FROM submission WHERE form_key = ? LIMIT 1");
+  for (let i = 0; i < 2500; i++) row.run(`big${i}`, big.key, 1000 + Math.floor(i / 3), form.key);
+  const ids = (await viewCsv(big.key, new URLSearchParams("order=old"), "Big").text()).trim().split("\r\n").slice(1).map((l) => l.split(",")[0]);
+  assert.deepEqual(ids, Array.from({ length: 2500 }, (_, i) => `big${i}`));
+  assert.equal(new Set((await viewCsv(big.key, new URLSearchParams(""), "Big").text()).trim().split("\r\n")).size, 2501);
+  const found = f.submissions(big.key, "inbox", "hello", 2, { perPage: 100, order: "old" });
+  assert.deepEqual([found.total, found.items.length, found.items[0].id], [2500, 100, "big100"]);
 });

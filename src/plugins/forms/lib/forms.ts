@@ -272,7 +272,6 @@ export type Scope = string | string[] | null;
 const scopeSql = (scope: Scope): [string, string[]] =>
   scope === null ? ["", []] : typeof scope === "string" ? [" AND form_key = ?", [scope]] : [` AND form_key IN (${scope.map(() => "?").join(", ") || "NULL"})`, scope];
 export type ListOptions = { perPage?: number; days?: number; order?: "new" | "old" };
-/** One page of submissions in a view, newest first unless asked; `q` searches every field, `days` keeps the recent ones. */
 /** The inbox filters in an admin URL (?view=&q=&days=&order=&per=&page=), checked; the list and its CSV export read the same ones. */
 export const listQuery = (p: URLSearchParams) => {
   // `tab=spam`, `show=` and the export's `status=spam` are old addresses (emails and bookmarks still use them).
@@ -286,21 +285,47 @@ export const listQuery = (p: URLSearchParams) => {
     perPage: PER_PAGE.includes(Number(p.get("per"))) ? Number(p.get("per")) : PAGE,
   };
 };
+const CHUNK = 1000;
+/** Every submission of a view in list order, read CHUNK rows at a time, so a big inbox never sits in memory at once. */
+export function* eachSubmission(scope: Scope, view: View, q = "", o: ListOptions = {}) {
+  const [sql, keys] = scopeSql(scope);
+  const old = o.order === "old";
+  const dir = old ? "ASC" : "DESC";
+  // Continues after the last row read, so rows arriving meanwhile are neither repeated nor skipped.
+  // shortcut: starred and workspace-wide views re-sort their rows for every chunk; past a million rows, read through a second connection instead.
+  const next = db.prepare(
+    `SELECT rowid AS _rowid, * FROM submission WHERE ${VIEW_SQL[view]}${sql} AND created_at > ? AND (created_at, rowid) ${old ? ">" : "<"} (?, ?)
+     ORDER BY created_at ${dir}, rowid ${dir} LIMIT ${CHUNK}`,
+  );
+  const needle = q.toLowerCase();
+  let at = old ? [-1, -1] : [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+  for (;;) {
+    const rows = next.all(...keys, o.days ? now() - o.days * 86400 : -1, ...at) as { _rowid: number; created_at: number }[];
+    for (const r of rows) {
+      const s = toSubmission(r)!;
+      if (!needle || values(s).some((v) => v.toLowerCase().includes(needle))) yield s;
+    }
+    if (rows.length < CHUNK) return;
+    at = [rows.at(-1)!.created_at, rows.at(-1)!._rowid];
+  }
+}
+/** One page of submissions in a view, newest first unless asked; `q` searches every field, `days` keeps the recent ones. */
 export const submissions = (scope: Scope, view: View, q = "", page = 1, o: ListOptions = {}) => {
   const perPage = o.perPage ?? PAGE;
-  const [sql, keys] = scopeSql(scope);
-  const where = `${VIEW_SQL[view]}${sql}${o.days ? " AND created_at > ?" : ""}`;
-  const args: (string | number)[] = o.days ? [...keys, now() - o.days * 86400] : keys;
-  const dir = o.order === "old" ? "ASC" : "DESC";
-  const select = `SELECT * FROM submission WHERE ${where} ORDER BY created_at ${dir}, rowid ${dir}`;
   if (!q) {
+    const [sql, keys] = scopeSql(scope);
+    const where = `${VIEW_SQL[view]}${sql}${o.days ? " AND created_at > ?" : ""}`;
+    const args: (string | number)[] = o.days ? [...keys, now() - o.days * 86400] : keys;
+    const dir = o.order === "old" ? "ASC" : "DESC";
     const total = (db.prepare(`SELECT COUNT(*) AS n FROM submission WHERE ${where}`).get(...args) as { n: number }).n;
-    return { total, items: db.prepare(`${select} LIMIT ? OFFSET ?`).all(...args, perPage, (page - 1) * perPage).map((r) => toSubmission(r)!) };
+    const rows = db.prepare(`SELECT * FROM submission WHERE ${where} ORDER BY created_at ${dir}, rowid ${dir} LIMIT ? OFFSET ?`).all(...args, perPage, (page - 1) * perPage);
+    return { total, items: rows.map((r) => toSubmission(r)!) };
   }
-  // shortcut: fields are encrypted, so search decrypts the whole inbox in memory; fine to tens of thousands, then add an index.
-  const needle = q.toLowerCase();
-  const hits = db.prepare(select).all(...args).map((r) => toSubmission(r)!).filter((s) => values(s).some((v) => v.toLowerCase().includes(needle)));
-  return { total: hits.length, items: hits.slice((page - 1) * perPage, page * perPage) };
+  // shortcut: fields are encrypted, so search decrypts the whole inbox, a chunk at a time; fine to tens of thousands, then add an index.
+  const items: Submission[] = [];
+  let total = 0;
+  for (const s of eachSubmission(scope, view, q, o)) if (total++ >= (page - 1) * perPage && items.length < perPage) items.push(s);
+  return { total, items };
 };
 export const counts = (scope: Scope) => {
   const [sql, keys] = scopeSql(scope);
