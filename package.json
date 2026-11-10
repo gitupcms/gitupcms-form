@@ -6,9 +6,9 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gitupcms/gitupcms-forms.git"
+    "url": "git+https://github.com/gitupcms/gitupcms-form.git"
   },
-  "homepage": "https://github.com/gitupcms/gitupcms-forms",
+  "homepage": "https://github.com/gitupcms/gitupcms-form",
   "bin": {
     "gitupcms-forms": "bin/gitupcms-forms.mjs"
   },
