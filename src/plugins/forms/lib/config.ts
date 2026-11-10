@@ -28,6 +28,9 @@ export type FormConfig = {
   sheets: string;
   notion: { token: string; database: string };
   airtable: { token: string; base: string; table: string };
+  zapier: string;
+  /** `field`: only subscribe when the submission fills this field (a newsletter checkbox); empty: everyone. */
+  mailchimp: { key: string; audience: string; field: string };
   autoReply: { enabled: boolean; subject: string; body: string };
   rules: Rule[];
 };
@@ -44,6 +47,8 @@ export const defaults = (): FormConfig => ({
   sheets: "",
   notion: { token: "", database: "" },
   airtable: { token: "", base: "", table: "" },
+  zapier: "",
+  mailchimp: { key: "", audience: "", field: "" },
   autoReply: { enabled: false, subject: "We got your message", body: "Hi {{name}},\n\nThanks for writing to us. We will get back to you soon." },
   rules: [],
 });
@@ -129,12 +134,18 @@ const sections: { [K in keyof FormConfig]: (v: any) => FormConfig[K] } = {
     if ((a.token || a.base || a.table) && !(a.token && /^app\w+$/.test(a.base) && a.table)) throw new HttpError("Airtable needs the token, the base ID (app…) and the table name.", 400);
     return a;
   },
+  zapier: (v) => httpsUrl(v, "The Zapier webhook", /^hooks\.zapier\.com$/),
+  mailchimp: (v) => {
+    const m = { key: str(v?.key, 200), audience: str(v?.audience, 50), field: str(v?.field, 100) };
+    if ((m.key || m.audience) && !(/^[0-9a-f]{32}-us\d+$/.test(m.key) && /^\w+$/.test(m.audience))) throw new HttpError("Mailchimp needs the API key (…-us21) and the audience ID.", 400);
+    return m;
+  },
   autoReply: (v) => ({ enabled: bool(v?.enabled), subject: str(v?.subject, 200) || "We got your message", body: str(v?.body, 5000) }),
   rules: (v) => (Array.isArray(v) ? v : []).slice(0, 25).map(rule),
 };
 
 /** Secret field, and the field that says the section is still in use. */
-const KEEP: Record<string, [string, string]> = { captcha: ["secret", "provider"], webhookAuth: ["value", "kind"], telegram: ["token", "chatId"], notion: ["token", "database"], airtable: ["token", "base"] };
+const KEEP: Record<string, [string, string]> = { captcha: ["secret", "provider"], webhookAuth: ["value", "kind"], telegram: ["token", "chatId"], notion: ["token", "database"], airtable: ["token", "base"], mailchimp: ["key", "audience"] };
 
 /** The config as the admin page may see it: secrets blanked, with a flag saying whether one is saved. */
 export const forAdmin = (c: FormConfig) => {

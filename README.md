@@ -105,7 +105,7 @@ const ok = Math.abs(Date.now() / 1000 - t) < 300 &&
 
 ## Per form
 
-- **Delivery**: email recipients, auto-reply, webhook, Slack, Discord, Telegram, Google Sheets, Notion, Airtable.
+- **Delivery**: email recipients, auto-reply, webhook, Slack, Discord, Telegram, Google Sheets, Notion, Airtable, Zapier, Mailchimp (double opt-in).
 - **Rules**: "when topic is sales, email sales@… with subject Lead: {{name}}", with a dry run.
 - **Security**: allowed domains (with a localhost exception), CAPTCHA (Turnstile, hCaptcha, reCAPTCHA, Altcha), spam sensitivity, blocklist.
 - **Settings**: pause the form, redirect, how long to keep submissions.

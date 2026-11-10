@@ -118,7 +118,7 @@ as long as Processor processes Customer Data.
 
 Fill in from the services the cloud actually uses; remove any it does not.
 
-Destinations Customer turns on for a form (Slack, Discord, Telegram, Google Sheets, Notion, Airtable, webhooks, a
+Destinations Customer turns on for a form (Slack, Discord, Telegram, Google Sheets, Notion, Airtable, Zapier, Mailchimp, webhooks, a
 CAPTCHA provider) are not Processor's subprocessors: Customer chooses them, holds the contract with them, and
 instructs Processor to send Customer Data there.
 

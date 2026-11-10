@@ -89,7 +89,7 @@ Gitupcms Comments'in iskeleti aynen kullanılır: admin girişi (e-posta+şifre,
 - CAPTCHA: Turnstile, hCaptcha, reCAPTCHA v2/v3 (skor eşiği), Altcha (sunucunun kendisi, üçüncü taraf yok).
 - Spam hassasiyeti (düşük/orta/yüksek), formu duraklatma, localhost istisnası.
 - Auto-reply (adres başına günde bir; alan değerleri kısaltılır, linkler silinir).
-- Slack, Discord, Telegram, Google Sheets (Apps Script), Notion, Airtable.
+- Slack, Discord, Telegram, Google Sheets (Apps Script), Notion, Airtable, Zapier (Catch Hook), Mailchimp (pending üye, onay e-postası).
 - Kurallar (koşul → alıcı/konu/ek webhook/spam/dur) ve kaydetmeden dry-run.
 - Webhook kimlik doğrulama: Bearer, Basic, özel başlık (imza ile birlikte).
 - Ortak gelen kutusu (`/inbox`), REST API (`/api/v1`, Bearer `gf_…` anahtar) ve MCP (`/mcp`).

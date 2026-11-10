@@ -2,10 +2,12 @@
  * Chat and spreadsheet channels a submission can be sent to besides email and the webhook.
  * Each sender throws on failure (the caller logs it) and returns a short note on success.
  */
-import type { FormConfig } from "./config.ts";
+import { createHash } from "node:crypto";
+import { EMAIL, type FormConfig } from "./config.ts";
 import type { Fields } from "./spam.ts";
 
-export type Message = { form: string; data: Fields; files: string[]; url: string; createdAt: string };
+/** `email`: the sender's address (the form's email field), may be empty. */
+export type Message = { form: string; data: Fields; files: string[]; url: string; createdAt: string; email?: string };
 
 const show = (v: string | string[]) => [v].flat().join(", ");
 /** The submission as plain text, cut to `max` characters (chat apps limit message length). */
@@ -37,10 +39,25 @@ export const channels = (c: FormConfig, m: Message): Channel[] => {
   if (c.telegram.token)
     out.push({ kind: "telegram", target: `Telegram ${c.telegram.chatId}`, run: () => send(`https://api.telegram.org/bot${c.telegram.token}/sendMessage`, json({ chat_id: c.telegram.chatId, text: plainText(m, 4000), disable_web_page_preview: true })) });
   // Google Sheets through an Apps Script web app the owner deploys on their sheet (no Google sign-in here).
-  if (c.sheets) out.push({ kind: "sheets", target: "Google Sheets", run: () => sheets(c.sheets, { form: m.form, submittedAt: m.createdAt, ...Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)])), files: m.files.join(", "), url: m.url }) });
+  const row = () => ({ form: m.form, submittedAt: m.createdAt, ...Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, show(v)])), files: m.files.join(", "), url: m.url });
+  if (c.sheets) out.push({ kind: "sheets", target: "Google Sheets", run: () => sheets(c.sheets, row()) });
   if (c.notion.token) out.push({ kind: "notion", target: "Notion", run: () => notion(c.notion, m) });
   if (c.airtable.token) out.push({ kind: "airtable", target: `Airtable ${c.airtable.table}`, run: () => airtable(c.airtable, m) });
+  // Zapier "Catch Hook": flat fields, so each one can be picked in the Zap's later steps.
+  if (c.zapier) out.push({ kind: "zapier", target: "Zapier", run: () => send(c.zapier, json(row())) });
+  const consent = !c.mailchimp.field || show(m.data[c.mailchimp.field] ?? "").trim();
+  if (c.mailchimp.key && m.email && EMAIL.test(m.email) && consent) out.push({ kind: "mailchimp", target: `Mailchimp ${c.mailchimp.audience}`, run: () => mailchimp(c.mailchimp, m.email!) });
   return out;
+};
+
+/**
+ * Adds the sender to the audience as "pending": Mailchimp emails them to confirm (double opt-in), so nobody is
+ * subscribed by a contact form alone. Someone already on the list is left as they are.
+ */
+const mailchimp = (c: FormConfig["mailchimp"], email: string) => {
+  const dc = c.key.split("-").pop();
+  const hash = createHash("md5").update(email.toLowerCase()).digest("hex");
+  return send(`https://${dc}.api.mailchimp.com/3.0/lists/${c.audience}/members/${hash}`, { ...json({ email_address: email, status_if_new: "pending" }, { Authorization: `Basic ${Buffer.from(`any:${c.key}`).toString("base64")}` }), method: "PUT" });
 };
 
 /**

@@ -85,3 +85,23 @@ test("Airtable leaves out fields the table has no column for; Sheets needs the s
     globalThis.fetch = real;
   }
 });
+
+test("Mailchimp: only with an email and the consent field; the sender joins as pending", async () => {
+  const { channels } = await import("./channels.ts");
+  const key = `${"a".repeat(32)}-us21`;
+  assert.throws(() => patchConfig(defaults(), { mailchimp: { key: "nope", audience: "x" } }), /Mailchimp/);
+  const c = patchConfig(defaults(), { mailchimp: { key, audience: "abc123", field: "newsletter" }, zapier: "https://hooks.zapier.com/hooks/catch/1/x/" });
+  const m = { form: "F", data: { name: "Ada" } as any, files: [], url: "u", createdAt: "", email: "Ada@B.co" };
+  assert.deepEqual(channels(c, m).map((ch) => ch.kind), ["zapier"]);
+  const real = globalThis.fetch;
+  let call: any;
+  globalThis.fetch = (async (url: string, init: any) => ((call = { url, init }), new Response("{}"))) as any;
+  try {
+    await channels(c, { ...m, data: { name: "Ada", newsletter: "on" } }).find((ch) => ch.kind === "mailchimp")!.run();
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.match(call.url, /^https:\/\/us21\.api\.mailchimp\.com\/3\.0\/lists\/abc123\/members\/[0-9a-f]{32}$/);
+  assert.equal(call.init.method, "PUT");
+  assert.equal(JSON.parse(call.init.body).status_if_new, "pending");
+});

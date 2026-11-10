@@ -102,7 +102,7 @@ export const deliver = async (form: Form, sub: Submission, retryMs = 5000, opts 
         return ok;
       }),
     );
-  const message = { form: form.name, data: sub.data, files: sub.files.map((f) => f.name), url: submissionUrl(form, sub), createdAt: new Date(sub.createdAt * 1000).toISOString() };
+  const message = { form: form.name, data: sub.data, files: sub.files.map((f) => f.name), url: submissionUrl(form, sub), createdAt: new Date(sub.createdAt * 1000).toISOString(), email: replyTo };
   for (const ch of channels(form.config, message)) jobs.push(attempt(sub.id, ch.kind, ch.target, ch.run));
   if (opts.autoReply && form.config.autoReply.enabled && replyTo) jobs.push(attempt(sub.id, "auto-reply", replyTo, async () => void (await autoReply(form, sub))));
   await Promise.all(jobs);
